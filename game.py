@@ -23,7 +23,7 @@ class Enemy(pygame.sprite.Sprite):
         self.speed = 5
 
     def update(self):
-        # Инкапсуляция: враг САМ проверяет кнопки и двигает СЕБЯ.
+        # Инкапсуляция. враг САМ проверяет кнопки и двигает СЕБЯ
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.rect.x -= self.speed
