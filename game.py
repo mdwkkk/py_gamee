@@ -60,6 +60,24 @@ class AlienBug(pygame.sprite.Sprite):
 
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
+class Turret(pygame.sprite.Sprite):
+    def __init__(self, pos, *groups):
+        super().__init__(*groups)
+        
+        self.image = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, (100, 100, 100), (20, 20), 16)
+        pygame.draw.rect(self.image, (200, 200, 200), (16, 4, 8, 16))
+
+        self.rect = self.image.get_rect(center=pos)
+
+        # характеристики для стрельбы
+        self.radius = 100 # обзор
+        self.cooldown = 1.0 # скорость стрельбы
+        self.current_time = 0.0
+    
+    def update(self, dt):
+        pass
+
 class MarsBaseGame:
     def __init__(self):
         pygame.init()
@@ -69,6 +87,7 @@ class MarsBaseGame:
         self.running = True
 
         self.all_sprites = pygame.sprite.Group()
+        self.turrets_group = pygame.sprite.Group()
         
         # Спавним тестового жука
         AlienBug(WAYPOINTS, self.all_sprites)
