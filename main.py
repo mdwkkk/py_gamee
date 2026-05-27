@@ -6,12 +6,14 @@ WIDTH, HEIGHT = 800, 600
 TILE_SIZE = 40
 
 # Цветовая Звездного десанта
-COLOR_KLENDATHU_ROCK = (80, 60, 50)      # Грунт
-COLOR_CANYON = (40, 30, 25)              # Глубокий каньон (Дорога для жуков)
-COLOR_GRID = (100, 80, 70)               # сетка
-COLOR_ARACHNID = (255, 120, 0)           # Жуки
-COLOR_OUTPOST = (150, 150, 150)  
-COLOR_BULLET = (255, 255, 0)        # Аванпост
+COLOR_KLENDATHU_ROCK = (80, 60, 50) # Грунт
+COLOR_CANYON = (40, 30, 25) # Глубокий каньон (Дорога для жуков)
+COLOR_GRID = (100, 80, 70) # сетка
+COLOR_ARACHNID = (255, 120, 0) # Жуки
+COLOR_OUTPOST = (150, 150, 150) # аванпост       
+COLOR_BULLET = (255, 255, 0) # пули
+COLOR_TEXT = (255, 255, 255)
+COLOR_UI_BAR = (20, 20, 20)
 
 # Маршрут врагов (Координаты центров тайлов)
 WAYPOINTS = [
@@ -47,7 +49,7 @@ class AlienBug(pygame.sprite.Sprite):
     def __init__(self, waypoints, *groups):
         super().__init__(*groups)
         orig_image = pygame.image.load('assets/bug.png').convert_alpha()
-        self.image = pygame.transform.scale(orig_image, (40, 40))
+        self.image = pygame.transform.scale(orig_image, (50, 50))
         self.rect = self.image.get_rect()
         
         self.waypoints = waypoints
@@ -60,15 +62,19 @@ class AlienBug(pygame.sprite.Sprite):
         self.speed = 150  # пикселей в секунду
         self.hp = 100
 
+        self.reached_base = False # флаг прорыва к аванпосту
+
     def take_damage(self, amount):
         self.hp -= amount
         if self.hp <= 0:
             self.kill()
+            return True
+        return False
     
     def update(self, dt):
         # Если достигли конца маршрута (аванпоста)
         if self.current_wp_index >= len(self.waypoints):
-            self.kill() # жук исчезает
+            self.reached_base = True 
             return
 
         # Берем текущую цель
@@ -96,8 +102,8 @@ class Turret(pygame.sprite.Sprite):
         
         img_front = pygame.image.load('assets/turret_front.png').convert_alpha()
         img_back = pygame.image.load('assets/turret_back.png').convert_alpha()
-        self.image_front = pygame.transform.scale(img_front, (40, 40))
-        self.image_back = pygame.transform.scale(img_back, (40, 40))
+        self.image_front = pygame.transform.scale(img_front, (50, 50))
+        self.image_back = pygame.transform.scale(img_back, (50, 50))
         self.image = self.image_front
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.Vector2(pos)
@@ -139,10 +145,13 @@ class Turret(pygame.sprite.Sprite):
 class OutpostDefenseGame:
     def __init__(self):
         pygame.init()
+        pygame.font.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Whiskey Outpost")
         self.clock = pygame.time.Clock()
         self.running = True
+
+        self.ui_font = pygame.font.SysFont("Arial", 22, bold=True)
 
         self.all_sprites = pygame.sprite.Group()
         self.turrets_group = pygame.sprite.Group()
@@ -151,6 +160,11 @@ class OutpostDefenseGame:
         
         self.spawn_timer = 0.0
         self.spawn_interval = 0.8
+
+        self.credits = 150 # стартовый капитал кредитов
+        self.turret_cost = 50 # стоимость одной турели
+        self.base_hp = 100 # хп аванпоста в %
+        self.score = 0 # число уничтоженных жуков
 
     def draw_grid_and_path(self):
         self.screen.fill(COLOR_KLENDATHU_ROCK)
@@ -169,22 +183,49 @@ class OutpostDefenseGame:
         dome_pos = WAYPOINTS[-1]
         pygame.draw.circle(self.screen, COLOR_OUTPOST, dome_pos, 40)
 
+    def draw_ui(self):
+        pygame.draw.rect(self.screen, COLOR_UI_BAR, (0, 0, WIDTH, 40))
+        hp_text = f"АВАНПОСТ: {self.base_hp}"
+        credits_text = f"КРЕДИТЫ: ${self.credits}"
+        score_text = f"УНИЧТОЖЕНИЕ: {self.score}"
+        cost_text = f"ТУРРЕЛЬ: ${self.turret_cost}"
+
+        hp_surface = self.ui_font.render(hp_text, True, (255, 50, 50) if self.base_hp <= 30 else COLOR_TEXT)
+        credits_surface = self.ui_font.render(credits_text, True, (0, 128, 0))
+        score_surface = self.ui_font.render(score_text, True, COLOR_TEXT)
+        cost_surface = self.ui_font.render(cost_text, True, (150, 150, 150))
+
+        self.screen.blit(hp_surface, (20, 8))
+        self.screen.blit(credits_surface, (220, 8))
+        self.screen.blit(score_surface, (420, 8))
+        self.screen.blit(cost_surface, (630, 8))
+
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_x, mouse_y = event.pos
-                grid_x = (mouse_x // TILE_SIZE) * TILE_SIZE
-                grid_y = (mouse_y // TILE_SIZE) * TILE_SIZE
-                center_pos = (grid_x + TILE_SIZE // 2, grid_y + TILE_SIZE // 2)
-                
-                temp_rect = pygame.Rect(grid_x, grid_y, TILE_SIZE, TILE_SIZE)
-                # проверка, чтобы не ставить турель на другую
-                if not any(t.rect.colliderect(temp_rect) for t in self.turrets_group):
-                    Turret(center_pos, self.all_sprites, self.turrets_group)
+                if event.pos[1] < 40:
+                    continue
+
+                if self.credits >= self.turret_cost:
+                    mouse_x, mouse_y = event.pos
+                    grid_x = (mouse_x // TILE_SIZE) * TILE_SIZE
+                    grid_y = (mouse_y // TILE_SIZE) * TILE_SIZE
+                    center_pos = (grid_x + TILE_SIZE // 2, grid_y + TILE_SIZE // 2)
+                    
+                    temp_rect = pygame.Rect(grid_x, grid_y, TILE_SIZE, TILE_SIZE)
+                    # проверка, чтобы не ставить турель на другую
+                    if not any(t.rect.colliderect(temp_rect) for t in self.turrets_group):
+                        Turret(center_pos, self.all_sprites, self.turrets_group)
+                        self.credits -= self.turret_cost
+                else:
+                    print("Недостачно кредитов")
 
     def update(self, dt):
+        if self.base_hp <= 0:
+            return
+        
         # спавн жуков
         self.spawn_timer += dt
         if self.spawn_timer >= self.spawn_interval:
@@ -199,6 +240,14 @@ class OutpostDefenseGame:
         for turret in self.turrets_group:
             turret.update(dt, self.bugs_group, self.all_sprites, self.bullets_group)
 
+        # проверка нанес ли жук урон по базе
+        for bug in list(self.bugs_group):
+            if bug.reached_base:
+                self.base_hp -= 10
+                bug.kill()
+                if self.base_hp < 0:
+                    self.base_hp = 0
+        
         # обработка попаданий
         # флаг False означает "не удалять жука автоматически"
         # флаг True означает "удалить пулю при попадании"
@@ -206,11 +255,21 @@ class OutpostDefenseGame:
         
         for bug, bullets in hits.items():
             for bullet in bullets:
-                bug.take_damage(bullet.damage)
+                if bug.take_damage(bullet.damage):
+                    self.credits += 15
+                    self.score += 1
 
     def draw(self):
         self.draw_grid_and_path()
         self.all_sprites.draw(self.screen)
+        
+        self.draw_ui()
+        if self.base_hp <= 0:
+            game_over_font = pygame.font.SysFont("Arial", 48, bold=True)
+            go_surface = game_over_font.render("АВАНПОСТ ПАЛ!", True, (255, 0, 0))
+            go_rect = go_surface.get_rect(center=(WIDTH//2, HEIGHT//2))
+            self.screen.blit(go_surface, go_rect)
+
         pygame.display.flip()
 
     def run(self):
