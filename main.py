@@ -62,13 +62,13 @@ class AlienBug(pygame.sprite.Sprite):
 
     def take_damage(self, amount):
         self.hp -= amount
-        if self.hp == 0:
+        if self.hp <= 0:
             self.kill()
     
     def update(self, dt):
         # Если достигли конца маршрута (аванпоста)
         if self.current_wp_index >= len(self.waypoints):
-            self.kill() # Жук исчезает (потом добавлю нанесение урона базе)
+            self.kill() # жук исчезает
             return
 
         # Берем текущую цель
@@ -99,8 +99,6 @@ class Turret(pygame.sprite.Sprite):
         self.image_front = pygame.transform.scale(img_front, (40, 40))
         self.image_back = pygame.transform.scale(img_back, (40, 40))
         self.image = self.image_front
-        self.rect = self.image.get_rect(center=pos)
-
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.Vector2(pos)
 
@@ -153,8 +151,6 @@ class OutpostDefenseGame:
         
         self.spawn_timer = 0.0
         self.spawn_interval = 0.8
-        # Спавним тестового жука
-        AlienBug(WAYPOINTS, self.all_sprites)
 
     def draw_grid_and_path(self):
         self.screen.fill(COLOR_KLENDATHU_ROCK)
@@ -184,7 +180,6 @@ class OutpostDefenseGame:
                 center_pos = (grid_x + TILE_SIZE // 2, grid_y + TILE_SIZE // 2)
                 
                 temp_rect = pygame.Rect(grid_x, grid_y, TILE_SIZE, TILE_SIZE)
-                
                 # проверка, чтобы не ставить турель на другую
                 if not any(t.rect.colliderect(temp_rect) for t in self.turrets_group):
                     Turret(center_pos, self.all_sprites, self.turrets_group)
@@ -202,13 +197,13 @@ class OutpostDefenseGame:
         
         # обновление турелей
         for turret in self.turrets_group:
-            turret.update(dt, self.bugs_group, self.bullets_group, self.all_sprites)
+            turret.update(dt, self.bugs_group, self.all_sprites, self.bullets_group)
 
         # обработка попаданий
         # флаг False означает "не удалять жука автоматически"
         # флаг True означает "удалить пулю при попадании"
         hits = pygame.sprite.groupcollide(self.bugs_group, self.bullets_group, False, True)
-
+        
         for bug, bullets in hits.items():
             for bullet in bullets:
                 bug.take_damage(bullet.damage)
@@ -216,12 +211,6 @@ class OutpostDefenseGame:
     def draw(self):
         self.draw_grid_and_path()
         self.all_sprites.draw(self.screen)
-        
-        # лазерный прицела для наглядности работы алгоритма
-        for turret in self.turrets_group:
-            if turret.target:
-                pygame.draw.line(self.screen, (255, 0, 0), turret.rect.center, turret.target.rect.center, 2)
-                
         pygame.display.flip()
 
     def run(self):
