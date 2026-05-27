@@ -10,7 +10,8 @@ COLOR_KLENDATHU_ROCK = (80, 60, 50)      # Грунт
 COLOR_CANYON = (40, 30, 25)              # Глубокий каньон (Дорога для жуков)
 COLOR_GRID = (100, 80, 70)               # сетка
 COLOR_ARACHNID = (255, 120, 0)           # Жуки
-COLOR_OUTPOST = (150, 150, 150)          # Аванпост
+COLOR_OUTPOST = (150, 150, 150)  
+COLOR_BULLET = (255, 255, 0)        # Аванпост
 
 # Маршрут врагов (Координаты центров тайлов)
 WAYPOINTS = [
@@ -18,13 +19,35 @@ WAYPOINTS = [
     (600, 460), (600, 300), (800, 300)
 ]
 
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, start_pos, target_pos, damage, *groups):
+        super().__init__(*groups)
+        self.image = pygame.Surface((6, 6), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, COLOR_BULLET, (3, 3), 3)
+        self.rect = self.image.get_rect(center=start_pos)
+
+        self.pos = pygame.math.Vector2(start_pos)
+        self.damage = damage
+        self.speed = 600
+
+        target_vect = pygame.math.Vector2(target_pos)
+        direction = target_vect - self.pos
+        if direction.length() > 0:
+            self.direction = direction.normalize()
+        else:
+            self.direction = pygame.math.Vector2(1, 0)
+
+    def update(self, dt):
+        self.pos += self.direction * self.speed * dt
+        self.rect.center = (round(self.pos.x), round(self.pos.y))
+        if not(0 <= self.rect.x <= WIDTH and 0 <= self.rect.y <= HEIGHT): # если пуля улетает за экран, удаляем ее
+            self.kill()
+
 class AlienBug(pygame.sprite.Sprite):
     def __init__(self, waypoints, *groups):
         super().__init__(*groups)
-        self.image = pygame.Surface((30, 30), pygame.SRCALPHA)
-        # Рисуем жука 
-        pygame.draw.circle(self.image, COLOR_ARACHNID, (15, 15), 15)
-        pygame.draw.circle(self.image, (0, 0, 0), (15, 15), 10, 2)
+        orig_image = pygame.image.load('assets/bug.png').convert_alpha()
+        self.image = pygame.transform.scale(orig_image, (40, 40))
         self.rect = self.image.get_rect()
         
         self.waypoints = waypoints
@@ -34,8 +57,14 @@ class AlienBug(pygame.sprite.Sprite):
         self.pos = pygame.math.Vector2(self.waypoints[self.current_wp_index])
         self.rect.center = (round(self.pos.x), round(self.pos.y))
         
-        self.speed = 190  # пикселей в секунду
+        self.speed = 150  # пикселей в секунду
+        self.hp = 100
 
+    def take_damage(self, amount):
+        self.hp -= amount
+        if self.hp == 0:
+            self.kill()
+    
     def update(self, dt):
         # Если достигли конца маршрута (аванпоста)
         if self.current_wp_index >= len(self.waypoints):
@@ -65,16 +94,23 @@ class Turret(pygame.sprite.Sprite):
     def __init__(self, pos, *groups):
         super().__init__(*groups)
         
-        self.image = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, (100, 100, 100), (20, 20), 16)
-        pygame.draw.rect(self.image, (200, 200, 200), (16, 4, 8, 16))
+        img_front = pygame.image.load('assets/turret_front.png').convert_alpha()
+        img_back = pygame.image.load('assets/turret_back.png').convert_alpha()
+        self.image_front = pygame.transform.scale(img_front, (40, 40))
+        self.image_back = pygame.transform.scale(img_back, (40, 40))
+        self.image = self.image_front
+        self.rect = self.image.get_rect(center=pos)
 
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.Vector2(pos)
 
-        # характеристики для стрельбы
-        self.radius = 100 # обзор
+        self.radius = 125 # радиус обзора
         self.target = None # цель
+
+        # характеристики для стрельбы
+        self.damage = 35 # урон за один выстрел
+        self.cooldown = 0.4 # задержка между выстрелами
+        self.shoot_timer = 0.0
     
     def find_target(self, bugs_group):
         closest_bug = None
@@ -88,8 +124,19 @@ class Turret(pygame.sprite.Sprite):
 
         return closest_bug
     
-    def update(self, dt, bugs_group):
-        self.target = self.find_target(bugs_group)
+    def update(self, dt, bugs_group, all_sprites, bullets_group):
+        self.target = self.find_target(bugs_group) # находим цель
+        self.shoot_timer += dt # обновляем таймер перезарядки
+        if self.target and self.shoot_timer >= self.cooldown:
+            Bullet(self.rect.center, self.target.rect.center, self.damage, all_sprites, bullets_group)
+            self.shoot_timer = 0.0
+        
+        # меняем картинку турели в зависимости от позиции врага
+        if self.target:
+            if self.target.rect.centery < self.rect.centery:
+                self.image = self.image_back
+            else:
+                self.image = self.image_front
 
 class OutpostDefenseGame:
     def __init__(self):
@@ -102,6 +149,7 @@ class OutpostDefenseGame:
         self.all_sprites = pygame.sprite.Group()
         self.turrets_group = pygame.sprite.Group()
         self.bugs_group = pygame.sprite.Group()
+        self.bullets_group = pygame.sprite.Group()
         
         self.spawn_timer = 0.0
         self.spawn_interval = 0.8
@@ -148,12 +196,22 @@ class OutpostDefenseGame:
             AlienBug(WAYPOINTS, self.all_sprites, self.bugs_group)
             self.spawn_timer = 0.0 # Сброс таймера
             
-        # обновление жуков
+        # обновление жуков и пуль
         self.bugs_group.update(dt)
+        self.bullets_group.update(dt)
         
         # обновление турелей
         for turret in self.turrets_group:
-            turret.update(dt, self.bugs_group)
+            turret.update(dt, self.bugs_group, self.bullets_group, self.all_sprites)
+
+        # обработка попаданий
+        # флаг False означает "не удалять жука автоматически"
+        # флаг True означает "удалить пулю при попадании"
+        hits = pygame.sprite.groupcollide(self.bugs_group, self.bullets_group, False, True)
+
+        for bug, bullets in hits.items():
+            for bullet in bullets:
+                bug.take_damage(bullet.damage)
 
     def draw(self):
         self.draw_grid_and_path()
