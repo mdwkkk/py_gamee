@@ -303,7 +303,7 @@ class OutpostDefenseGame:
         self.draw_ui()
         if self.base_hp <= 0:
             game_over_font = pygame.font.SysFont("Arial", 48, bold=True)
-            go_surface = game_over_font.render("АВАНПОСТ ПАЛ!", True, (255, 0, 0))
+            go_surface = game_over_font.render("АВАНПОСТ УНИЧТОЖЕН!", True, (255, 0, 0))
             go_rect = go_surface.get_rect(center=(WIDTH // 2, HEIGHT // 2))
             self.screen.blit(go_surface, go_rect)
 
