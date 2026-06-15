@@ -275,7 +275,7 @@ class OutpostDefenseGame:
         if self.base_hp <= 0:
             return
 
-        # Логика управления волнами
+        # управление волнами
         if not self.is_wave_active:
             self.wave_timer -= dt
             if self.wave_timer <= 0:
@@ -283,7 +283,7 @@ class OutpostDefenseGame:
         else:
             wave_data = self.waves[self.current_wave_index]
             
-            # Спавн жуков
+            # спавн жуков
             if self.bugs_spawned < wave_data["count"]:
                 self.spawn_timer += dt
 
@@ -300,7 +300,7 @@ class OutpostDefenseGame:
                     self.bugs_spawned += 1
                     self.spawn_timer = 0.0
 
-            # Проверка завершения волны
+            # проверка завершения волны
             if self.bugs_finished >= wave_data["count"]:
                 self.end_wave()
 
@@ -335,6 +335,9 @@ class OutpostDefenseGame:
                     self.score += 1
                     self.bugs_finished += 1
     
+    def _is_valid_position(self, center_pos, ignore_turrent=None):
+        pass
+    
     def start_next_wave(self):
         self.is_wave_active = True
         self.bugs_spawned = 0
@@ -342,6 +345,8 @@ class OutpostDefenseGame:
         self.current_path = self.waves[self.current_wave_index]["path"]
         
         self.outpost_rect.center = self.current_path[-1]
+        for turrent in list(self.turrets_group):
+            pass
 
     def end_wave(self):
         self.is_wave_active = False
