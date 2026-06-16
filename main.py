@@ -2,6 +2,7 @@ import pygame
 import sys
 import settings
 
+
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, start_pos, target_pos, damage, *groups):
         super().__init__(*groups)
@@ -134,6 +135,55 @@ class Turret(pygame.sprite.Sprite):
                 self.image = self.image_front
 
 
+class Button:
+    def __init__(self, x, y, width, height, text, font, action=None):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.font = font
+        self.action = action
+        
+        # цвета-заглушки (пока нет картинок)
+        self.color = (50, 50, 50)
+        self.hover_color = (100, 100, 100)
+        self.text_color = settings.COLOR_TEXT
+        self.is_hovered = False
+
+    def draw(self, surface):
+        color = self.hover_color if self.is_hovered else self.color
+        pygame.draw.rect(surface, color, self.rect, border_radius=8)
+        pygame.draw.rect(surface, (150, 150, 150), self.rect, 2, border_radius=8)
+        
+        text_surf = self.font.render(self.text, True, self.text_color)
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        surface.blit(text_surf, text_rect)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.is_hovered and self.action:
+                self.action()
+
+class ImageButton:
+    def __init__(self, x, y, image, hover_image=None, action=None):
+        self.image = image
+        self.hover_image = hover_image if hover_image else image 
+        self.rect = self.image.get_rect(center=(x, y)) 
+        
+        self.action = action
+        self.is_hovered = False
+
+    def draw(self, surface):
+        current_image = self.hover_image if self.is_hovered else self.image
+        surface.blit(current_image, self.rect)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.is_hovered and self.action:
+                self.action()
+
 class OutpostDefenseGame:
     def __init__(self):
         pygame.init()
@@ -181,100 +231,152 @@ class OutpostDefenseGame:
         self.base_hp = 100  # хп аванпоста
         self.score = 0  # число уничтоженных жуков 
 
+        self.state = "MENU"
 
-    def draw_grid_and_path(self):
-        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
-            for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
-                self.screen.blit(self.terrain_tile, (x, y))
+        orig_start = pygame.image.load("assets/start.png").convert_alpha()
+        self.start_img = pygame.transform.scale(orig_start, (250, 60))
+        self.menu_font = pygame.font.SysFont("Arial", 36, bold=True)
+        self.title_font = pygame.font.SysFont("Arial", 64, bold=True)
+        center_x = settings.WIDTH // 2
+        btn_w, btn_h = 250, 60
 
-        # отрисовка сетки
-        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
-            pygame.draw.line(self.screen, settings.COLOR_GRID, (x, 0), (x, settings.HEIGHT))
-        for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
-            pygame.draw.line(self.screen, settings.COLOR_GRID, (0, y), (settings.WIDTH, y))
+        orig_menu_bg = pygame.image.load("assets/menu_bg.png").convert()
+        self.menu_bg_img = pygame.transform.scale(orig_menu_bg, (settings.WIDTH, settings.HEIGHT))
 
-        # отрисовка дороги
-        if len(self.current_path) > 1:
-            pygame.draw.lines(self.screen, settings.COLOR_CANYON, False, self.current_path, settings.TILE_SIZE)
+        orig_logo = pygame.image.load("assets/logo.png").convert_alpha()
+        self.logo_img = pygame.transform.scale(orig_logo, (400, 230)) 
+        self.logo_rect = self.logo_img.get_rect(center=(settings.WIDTH // 2, 150))
 
-        # отрисовка базы на последней точке маршрута
-        self.screen.blit(self.outpost_img, self.outpost_rect)
+        orig_start = pygame.image.load("assets/start.png").convert_alpha()
+        self.start_img = pygame.transform.scale(orig_start, (280, 100))
+        
+        orig_start_hover = pygame.image.load("assets/start_hover.png").convert_alpha()
+        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 100))
 
-    def draw_ui(self):
-        pygame.draw.rect(self.screen, settings.COLOR_UI_BAR, (0, 0, settings.WIDTH, 40))
-        hp_text = f"АВАНПОСТ: {self.base_hp}"
-        credits_text = f"КРЕДИТЫ: ${self.credits}"
-        score_text = f"УНИЧТОЖЕНИЕ: {self.score}"
-        cost_text = f"ТУРРЕЛЬ: ${self.turret_cost}"
-        wave_text = f"ВОЛНА: {self.current_wave_index + 1}/{len(self.waves)}"
+        orig_exit = pygame.image.load("assets/exit.png").convert_alpha()
+        self.exit_img = pygame.transform.scale(orig_exit, (300, 130))
 
-        hp_surface = self.ui_font.render(
-            hp_text, True, (255, 50, 50) if self.base_hp <= 30 else settings.COLOR_TEXT
+        orig_exit_hover = pygame.image.load("assets/exit_hover.png").convert_alpha()
+        self.exit_hover_img = pygame.transform.scale(orig_exit_hover, (300, 130))
+
+        orig_pause_img = pygame.image.load("assets/pause.png").convert_alpha()
+        self.pause_img = pygame.transform.scale(orig_pause_img, (300, 130)) 
+        self.pause_rect = self.pause_img.get_rect(center=(settings.WIDTH // 2, 150))
+
+        self.btn_start = ImageButton(
+            x=center_x,
+            y=300, 
+            image=self.start_img, 
+            hover_image=self.start_hover_img, 
+            action=self.start_game
         )
-        credits_surface = self.ui_font.render(credits_text, True, (0, 128, 0))
-        score_surface = self.ui_font.render(score_text, True, settings.COLOR_TEXT)
-        cost_surface = self.ui_font.render(cost_text, True, (150, 150, 150))
-        wave_surface = self.ui_font.render(wave_text, True, (255, 200, 0))
+        
+        self.btn_quit = ImageButton(
+            x = center_x,
+            y = 410,
+            image=self.exit_img,
+            hover_image=self.exit_hover_img,
+            action=self.quit_game
+        )
+        left_x = center_x - btn_w // 2
+        
+        self.btn_resume = Button(left_x, 250, btn_w, btn_h, "ПРОДОЛЖИТЬ", self.menu_font, self.pause)
+        self.btn_menu = Button(left_x, 340, btn_w, btn_h, "В ГЛАВНОЕ МЕНЮ", self.menu_font, self.menu)
+        
+        self.reset_game()
+    
+    def reset_game(self):
+        """Сбрасывает весь прогресс для новой игры"""
+        self.all_sprites = pygame.sprite.Group()
+        self.turrets_group = pygame.sprite.Group()
+        self.bugs_group = pygame.sprite.Group()
+        self.bullets_group = pygame.sprite.Group()
 
-        self.screen.blit(hp_surface, (20, 8))
-        self.screen.blit(credits_surface, (180, 8))
-        self.screen.blit(score_surface, (340, 8))
-        self.screen.blit(cost_surface, (500, 8))
-        self.screen.blit(wave_surface, (660, 8))
+        self.credits = 150
+        self.base_hp = 100
+        self.score = 0
+        
+        self.current_wave_index = 0
+        self.waves = [
+            {"count": 5, "hp": 100, "speed": 100, "interval": 1.2, "path": settings.WAYPOINTS_1},
+            {"count": 10, "hp": 150, "speed": 120, "interval": 1.0, "path": settings.WAYPOINTS_2},
+            {"count": 15, "hp": 200, "speed": 150, "interval": 0.8, "path": settings.WAYPOINTS_3},
+            {"count": 20, "hp": 250, "speed": 170, "interval": 0.7, "path": settings.WAYPOINTS_1},
+            {"count": 25, "hp": 300, "speed": 200, "interval": 0.6, "path": settings.WAYPOINTS_2}
+        ]
+        self.current_wave_data = self.waves[self.current_wave_index]
+        self.current_path = self.current_wave_data["path"]
+        self.outpost_rect = self.outpost_img.get_rect(center=self.current_path[-1])
+        
+        self.wave_timer = 5.0
+        self.is_wave_active = False
+        self.spawn_timer = 0.0
+    
+    def start_game(self):
+        self.reset_game()
+        self.state = "PLAYING"
+    
+    def menu(self):
+        self.state = "MENU"
+
+    def quit_game(self):
+        self.running = False
+
+    def pause(self):
+        if self.state == "PLAYING":
+            self.state = "PAUSED"
+        elif self.state == "PAUSED":
+            self.state = "PLAYING"
 
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    if event.pos[1] < 40:
-                        continue
+            
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                if self.state in ["PLAYING", "PAUSED"]:
+                    self.pause()
+            
+            if self.state == "MENU":
+                self.btn_start.handle_event(event)
+                self.btn_quit.handle_event(event)
+            elif self.state == "PAUSED":
+                self.btn_resume.handle_event(event)
+                self.btn_menu.handle_event(event)
+            elif self.state == "GAME_OVER":
+                self.btn_menu.handle_event(event)
+            elif self.state == "PLAYING":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if event.pos[1] < 40:
+                            continue
 
-                    if self.credits >= self.turret_cost:
-                        mouse_x, mouse_y = event.pos
-                        grid_x = (mouse_x // settings.TILE_SIZE) * settings.TILE_SIZE
-                        grid_y = (mouse_y // settings.TILE_SIZE) * settings.TILE_SIZE
-                        center_pos = (grid_x + settings.TILE_SIZE // 2, grid_y + settings.TILE_SIZE // 2)
+                        if self.credits >= self.turret_cost:
+                            grid_x = (event.pos[0] // settings.TILE_SIZE) * settings.TILE_SIZE
+                            grid_y = (event.pos[1] // settings.TILE_SIZE) * settings.TILE_SIZE
+                            center_pos = (grid_x + settings.TILE_SIZE // 2, grid_y + settings.TILE_SIZE // 2)
 
-                        temp_rect = pygame.Rect(grid_x, grid_y, settings.TILE_SIZE, settings.TILE_SIZE)
-                        # проверка, чтобы не ставить турель на другую
-                        is_occup = any(
-                            t.rect.colliderect(temp_rect) for t in self.turrets_group
-                        )
-
-                        is_on_path = False
-                        for i in range(len(self.current_path) - 1):
-                            p1 = self.current_path[i]
-                            p2 = self.current_path[i + 1]
-                            if temp_rect.clipline(p1, p2):
-                                is_on_path = True
+                            if self._is_valid_position(center_pos):
+                                Turret(center_pos, self.all_sprites, self.turrets_group)
+                                self.credits -= self.turret_cost
+                            else:
+                                print("Невозможно поставить турель в этой зоне!")
+                        else:
+                            print("Недостаточно кредитов")
+                    
+                    elif event.button == 3:
+                        mouse_pos = event.pos
+                        for turret in self.turrets_group:
+                            if turret.rect.collidepoint(mouse_pos):
+                                turret.kill()
+                                self.credits += self.turret_cost // 4
+                                print("Турель продана!")
                                 break
 
-                        if temp_rect.collidepoint(self.current_path[-1]):
-                            is_on_path = True
-
-                        if not is_occup and not is_on_path:
-                            Turret(center_pos, self.all_sprites, self.turrets_group)
-                            self.credits -= self.turret_cost
-                        else:
-                            print("Невозможно поставить туррель в этой зоне!")
-                    else:
-                        print("Недостачно кредитов")
-                
-                elif event.button == 3:
-                    mouse_pos = event.pos
-                    for turret in self.turrets_group:
-                        if turret.rect.collidepoint(mouse_pos):
-                            turret.kill()
-                            self.credits += self.turret_cost // 4
-                            print("Турель продана!")
-                            break 
-
     def update(self, dt):
-        if self.base_hp <= 0:
+        if self.state != "PLAYING":
             return
-
+        
         # управление волнами
         if not self.is_wave_active:
             self.wave_timer -= dt
@@ -334,19 +436,67 @@ class OutpostDefenseGame:
                     self.credits += 15
                     self.score += 1
                     self.bugs_finished += 1
+                
+        if self.base_hp <= 0:
+            self.state = "GAME_OVER"
     
-    def _is_valid_position(self, center_pos, ignore_turrent=None):
-        pass
+    def _is_valid_position(self, center_pos, ignore_turret=None):
+        grid_x = center_pos[0] - settings.TILE_SIZE // 2
+        grid_y = center_pos[1] - settings.TILE_SIZE // 2
+        if not (0 <= grid_x < settings.WIDTH and 40 <= grid_y < settings.HEIGHT):
+            return False
+
+        temp_rect = pygame.Rect(grid_x, grid_y, settings.TILE_SIZE, settings.TILE_SIZE)
+        for t in self.turrets_group:
+            if t is not ignore_turret and t.rect.colliderect(temp_rect):
+                return False
+
+        for i in range(len(self.current_path) - 1):
+            p1 = self.current_path[i]
+            p2 = self.current_path[i + 1]
+            if temp_rect.clipline(p1, p2):
+                return False
+        
+        if temp_rect.collidepoint(self.current_path[-1]):
+            return False
+
+        return True
     
     def start_next_wave(self):
         self.is_wave_active = True
         self.bugs_spawned = 0
         self.bugs_finished = 0
-        self.current_path = self.waves[self.current_wave_index]["path"]
         
+        self.current_path = self.waves[self.current_wave_index]["path"]
+        self.current_wave_data = self.waves[self.current_wave_index]
         self.outpost_rect.center = self.current_path[-1]
-        for turrent in list(self.turrets_group):
-            pass
+        # если турель оказалась на пути врагов, то смещаем ее
+        for turret in list(self.turrets_group):
+            if not self._is_valid_position(turret.rect.center, ignore_turret=turret):
+                moved = False
+                
+                # ищем свободное место в радиусе от 1 до 3 клеток вокруг
+                for radius in range(1, 4):
+                    for dx in range(-radius, radius + 1):
+                        for dy in range(-radius, radius + 1):
+                            new_x = turret.rect.centerx + (dx * settings.TILE_SIZE)
+                            new_y = turret.rect.centery + (dy * settings.TILE_SIZE)
+                            new_pos = (new_x, new_y)
+
+                            # проверка клетки
+                            if self._is_valid_position(new_pos, ignore_turret=turret):
+                                turret.rect.center = new_pos
+                                turret.pos = pygame.math.Vector2(new_pos)
+                                moved = True
+                                break # прерываем цикл по dy
+                        if moved: 
+                            break # прерываем цикл по dx
+                    if moved: 
+                        break # прерываем цикл по radius
+
+                if not moved:
+                    turret.kill()
+                    print("Турель уничтожена!")
 
     def end_wave(self):
         self.is_wave_active = False
@@ -357,18 +507,79 @@ class OutpostDefenseGame:
             print("Все волны отбиты!")
             self.running = False
     
-    def draw(self):
-        self.draw_grid_and_path()
-        self.all_sprites.draw(self.screen)
+    def draw_grid_and_path(self):
+        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
+            for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
+                self.screen.blit(self.terrain_tile, (x, y))
 
-        self.draw_ui()
-        if self.base_hp <= 0:
-            game_over_font = pygame.font.SysFont("Arial", 48, bold=True)
-            go_surface = game_over_font.render("АВАНПОСТ УНИЧТОЖЕН!", True, (255, 0, 0))
-            go_rect = go_surface.get_rect(center=(settings.WIDTH // 2, settings.HEIGHT // 2))
-            self.screen.blit(go_surface, go_rect)
+        # отрисовка сетки
+        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
+            pygame.draw.line(self.screen, settings.COLOR_GRID, (x, 0), (x, settings.HEIGHT))
+        for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
+            pygame.draw.line(self.screen, settings.COLOR_GRID, (0, y), (settings.WIDTH, y))
+
+        # отрисовка дороги
+        if len(self.current_path) > 1:
+            pygame.draw.lines(self.screen, settings.COLOR_CANYON, False, self.current_path, settings.TILE_SIZE)
+
+        # отрисовка базы на последней точке маршрута
+        self.screen.blit(self.outpost_img, self.outpost_rect)
+
+    def draw(self):
+        if self.state in ["PLAYING", "PAUSED", "GAME_OVER"]:
+            self.draw_grid_and_path()
+            self.all_sprites.draw(self.screen)
+            self.draw_ui()
+
+        if self.state == "MENU":
+            self.screen.blit(self.menu_bg_img, (0, 0))
+            self.screen.blit(self.logo_img, self.logo_rect)
+            self.btn_start.draw(self.screen)
+            self.btn_quit.draw(self.screen)
+
+        elif self.state == "PAUSED":
+            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
+            overlay.set_alpha(150)
+            overlay.fill((0, 0, 0))
+            self.screen.blit(overlay, (0, 0))
+            self.screen.blit(self.pause_img, self.pause_rect)
+        
+            self.btn_resume.draw(self.screen)
+            self.btn_menu.draw(self.screen)
+
+        elif self.state == "GAME_OVER":
+            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill((50, 0, 0))
+            self.screen.blit(overlay, (0, 0))
+            
+            go_surf = self.title_font.render("АВАНПОСТ УНИЧТОЖЕН!", True, (255, 50, 50))
+            self.screen.blit(go_surf, go_surf.get_rect(center=(settings.WIDTH//2, 150)))
+            self.btn_menu.draw(self.screen)
 
         pygame.display.flip()
+
+    def draw_ui(self):
+        pygame.draw.rect(self.screen, settings.COLOR_UI_BAR, (0, 0, settings.WIDTH, 40))
+        hp_text = f"АВАНПОСТ: {self.base_hp}"
+        credits_text = f"КРЕДИТЫ: ${self.credits}"
+        score_text = f"УНИЧТОЖЕНИЕ: {self.score}"
+        cost_text = f"ТУРРЕЛЬ: ${self.turret_cost}"
+        wave_text = f"ВОЛНА: {self.current_wave_index + 1}/{len(self.waves)}"
+
+        hp_surface = self.ui_font.render(
+            hp_text, True, (255, 50, 50) if self.base_hp <= 30 else settings.COLOR_TEXT
+        )
+        credits_surface = self.ui_font.render(credits_text, True, (0, 128, 0))
+        score_surface = self.ui_font.render(score_text, True, settings.COLOR_TEXT)
+        cost_surface = self.ui_font.render(cost_text, True, (150, 150, 150))
+        wave_surface = self.ui_font.render(wave_text, True, (255, 200, 0))
+
+        self.screen.blit(hp_surface, (20, 8))
+        self.screen.blit(credits_surface, (200, 8))
+        self.screen.blit(score_surface, (380, 8))
+        self.screen.blit(cost_surface, (590, 8))
+        self.screen.blit(wave_surface, (760, 8))
 
     def run(self):
         while self.running:
