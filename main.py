@@ -209,30 +209,48 @@ class OutpostDefenseGame:
             {
                 "normal_count": 5, "normal_hp": 100, "normal_speed": 100,
              "tank_count": 0, "tank_hp": 0, "tank_speed": 0,
-              "interval": 1.2, "path": settings.WAYPOINTS_1
+              "interval": 1.2, "road": settings.WAYPOINTS_1
               },
             {
                 "normal_count": 10, "normal_hp": 80, "normal_speed": 130,
              "tank_count": 2, "tank_hp": 300, "tank_speed": 70,
-              "interval": 1.0, "path": settings.WAYPOINTS_2
+              "interval": 1.0, "road": settings.WAYPOINTS_2
               },
             {
                 "normal_count": 15, "normal_hp": 150, "normal_speed": 130,
              "tank_count": 5, "tank_hp": 500, "tank_speed": 60,
-              "interval": 0.8, "path": settings.WAYPOINTS_1
+              "interval": 0.8, "road": settings.WAYPOINTS_1
               },
         ]
         self.current_wave_index = 0
-        self.current_path = self.waves[self.current_wave_index]["path"]
+        self.current_road = self.waves[self.current_wave_index]["road"]
 
         self.ui_font = pygame.font.SysFont("Arial", 22, bold=True)
-        orig_terrain_img = pygame.image.load("assets/terrain.png").convert()
-        self.terrain_tile = pygame.transform.scale(
-            orig_terrain_img, (settings.TILE_SIZE, settings.TILE_SIZE)
-        )
+
+        orig_bg_img = pygame.image.load("assets/game_bg.png").convert()
+        self.background = pygame.transform.scale(orig_bg_img, (settings.WIDTH, settings.HEIGHT))
+
         orig_outpost_img = pygame.image.load("assets/outpost1.png").convert_alpha()
-        self.outpost_img = pygame.transform.scale(orig_outpost_img, (130, 130))
-        self.outpost_rect = self.outpost_img.get_rect(center=self.current_path[-1])
+        self.outpost_img = pygame.transform.scale(orig_outpost_img, (200, 200))
+        self.outpost_rect = self.outpost_img.get_rect(center=self.current_road[-1])
+
+        orig_road_vert = pygame.image.load("assets/road_vert.png").convert_alpha()
+        orig_road_gor = pygame.image.load("assets/road_gor.png").convert_alpha()
+
+        t_size = (settings.TILE_SIZE, settings.TILE_SIZE)
+        self.road_vert = pygame.transform.scale(orig_road_vert, t_size)
+        self.road_gor = pygame.transform.scale(orig_road_gor, t_size)
+        
+        self.road_draw = []
+        
+        self.grid_surface = pygame.Surface((settings.WIDTH, settings.HEIGHT), pygame.SRCALPHA)
+        alpha_level = 60  
+        grid_color_alpha = (*settings.COLOR_GRID, alpha_level)
+
+        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
+            pygame.draw.line(self.grid_surface, grid_color_alpha, (x, 0), (x, settings.HEIGHT))
+        for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
+            pygame.draw.line(self.grid_surface, grid_color_alpha, (0, y), (settings.WIDTH, y))
 
         self.all_sprites = pygame.sprite.Group()
         self.turrets_group = pygame.sprite.Group()
@@ -322,22 +340,24 @@ class OutpostDefenseGame:
             {
                 "normal_count": 5, "normal_hp": 100, "normal_speed": 100,
              "tank_count": 0, "tank_hp": 0, "tank_speed": 0,
-              "interval": 1.2, "path": settings.WAYPOINTS_1
+              "interval": 1.2, "road": settings.WAYPOINTS_1
               },
             {
                 "normal_count": 10, "normal_hp": 80, "normal_speed": 130,
              "tank_count": 2, "tank_hp": 300, "tank_speed": 70,
-              "interval": 1.0, "path": settings.WAYPOINTS_2
+              "interval": 1.0, "road": settings.WAYPOINTS_2
               },
             {
                 "normal_count": 15, "normal_hp": 150, "normal_speed": 130,
              "tank_count": 5, "tank_hp": 500, "tank_speed": 60,
-              "interval": 0.8, "path": settings.WAYPOINTS_1
+              "interval": 0.8, "road": settings.WAYPOINTS_1
               },
         ]
         self.current_wave_data = self.waves[self.current_wave_index]
-        self.current_path = self.current_wave_data["path"]
-        self.outpost_rect = self.outpost_img.get_rect(center=self.current_path[-1])
+        self.current_road = self.current_wave_data["road"]
+        self.outpost_rect = self.outpost_img.get_rect(center=self.current_road[-1])
+        self.outpost_rect.center = self.current_road[-1]
+        self._draw_road_graphics()
         
         self.wave_timer = 5.0
         self.is_wave_active = False
@@ -409,9 +429,10 @@ class OutpostDefenseGame:
         self.bugs_spawned = 0
         self.bugs_finished = 0
         
-        self.current_path = self.waves[self.current_wave_index]["path"]
+        self.current_road = self.waves[self.current_wave_index]["road"]
         self.current_wave_data = self.waves[self.current_wave_index]
-        self.outpost_rect.center = self.current_path[-1]
+        self.outpost_rect.center = self.current_road[-1]
+        self._draw_road_graphics()
 
         self.spawn_ochered = []
         
@@ -494,7 +515,7 @@ class OutpostDefenseGame:
                     bug = self.spawn_ochered[self.bugs_spawned]
                     if bug["type"] == "tank":
                         TankBug(
-                        self.current_path, 
+                        self.current_road, 
                         bug["hp"],
                         bug["speed"],
                         self.all_sprites,
@@ -502,7 +523,7 @@ class OutpostDefenseGame:
                         )
                     else:
                         AlienBug(
-                            self.current_path, 
+                            self.current_road, 
                             bug["hp"],
                             bug["speed"],
                             self.all_sprites,
@@ -561,40 +582,70 @@ class OutpostDefenseGame:
             if t is not ignore_turret and t.rect.colliderect(temp_rect):
                 return False
 
-        for i in range(len(self.current_path) - 1):
-            p1 = self.current_path[i]
-            p2 = self.current_path[i + 1]
+        for i in range(len(self.current_road) - 1):
+            p1 = self.current_road[i]
+            p2 = self.current_road[i + 1]
             if temp_rect.clipline(p1, p2):
                 return False
         
-        if temp_rect.collidepoint(self.current_path[-1]):
+        if temp_rect.collidepoint(self.current_road[-1]):
             return False
 
         return True
     
-    
-    
-    def draw_grid_and_path(self):
-        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
-            for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
-                self.screen.blit(self.terrain_tile, (x, y))
+    # рисовка графики дороги
+    def _draw_road_graphics(self):
+        self.road_draw = []
+        full_road = []
+        
+        for i in range(len(self.current_road) - 1):
+            p1 = pygame.math.Vector2(self.current_road[i])
+            p2 = pygame.math.Vector2(self.current_road[i+1])
+
+            direction = p2 - p1
+            dist = int(direction.length())
+            if dist == 0:
+                continue
+            direction = direction.normalize()
+
+            for step in range(0, dist, settings.TILE_SIZE):
+                point = p1 + direction * step
+                coord = (round(point.x), round(point.y))
+                if not full_road or full_road[-1] != coord:
+                    full_road.append(coord)
+        
+        last_coord = (round(self.current_road[-1][0]), round(self.current_road[-1][1]))
+        if not full_road or full_road[-1] != last_coord:
+            full_road.append(last_coord)
+        
+        for i in range(len(full_road)):
+            current = full_road[i]
+
+            if i == len(full_road) - 1:
+                pred_t = full_road[i-1]
+                img = self.road_vert if current[0] == pred_t[0] else self.road_gor 
+            else:
+                next_t = full_road[i+1]
+                img = self.road_vert if current[0] == next_t[0] else self.road_gor
+
+            rect = img.get_rect(center=current)
+            self.road_draw.append((img, rect))
+
+    def draw_grid_and_road(self):
+        self.screen.blit(self.background, (0, 0))
 
         # отрисовка сетки
-        for x in range(0, settings.WIDTH, settings.TILE_SIZE):
-            pygame.draw.line(self.screen, settings.COLOR_GRID, (x, 0), (x, settings.HEIGHT))
-        for y in range(0, settings.HEIGHT, settings.TILE_SIZE):
-            pygame.draw.line(self.screen, settings.COLOR_GRID, (0, y), (settings.WIDTH, y))
+        self.screen.blit(self.grid_surface, (0, 0))
 
-        # отрисовка дороги
-        if len(self.current_path) > 1:
-            pygame.draw.lines(self.screen, settings.COLOR_CANYON, False, self.current_path, settings.TILE_SIZE)
+        # отрисовка дороги 
+        for img, rect in self.road_draw:
+            self.screen.blit(img, rect)
 
-        # отрисовка базы на последней точке маршрута
         self.screen.blit(self.outpost_img, self.outpost_rect)
 
     def draw(self):
         if self.state in ["PLAYING", "PAUSED", "GAME_OVER"]:
-            self.draw_grid_and_path()
+            self.draw_grid_and_road()
             self.all_sprites.draw(self.screen)
             self.draw_ui()
 
