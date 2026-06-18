@@ -1,7 +1,7 @@
 import pygame
 import sys
 import settings
-
+import random
 
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, start_pos, target_pos, damage, *groups):
@@ -31,7 +31,7 @@ class Bullet(pygame.sprite.Sprite):
 
 
 class AlienBug(pygame.sprite.Sprite):
-    def __init__(self, waypoints, speed, hp, *groups):
+    def __init__(self, waypoints, hp, speed, *groups):
         super().__init__(*groups)
         orig_image = pygame.image.load("assets/bug.png").convert_alpha()
         self.image = pygame.transform.scale(orig_image, (50, 50))
@@ -81,6 +81,19 @@ class AlienBug(pygame.sprite.Sprite):
 
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
+class TankBug(AlienBug):
+    def __init__(self, waypoints, hp, speed, *groups):
+        super().__init__(waypoints, hp, speed, *groups)
+
+        orig_image = pygame.image.load("assets/TankBug.png").convert_alpha()
+        self.image = pygame.transform.scale(orig_image, (75, 75))
+        self.rect = self.image.get_rect()
+        self.rect.center = (round(self.pos.x), round(self.pos.y))
+
+    def take_damage(self, amount):
+        damage = max(1, amount - 10)
+        return super().take_damage(damage)
+    
 
 class Turret(pygame.sprite.Sprite):
     def __init__(self, pos, *groups):
@@ -193,11 +206,21 @@ class OutpostDefenseGame:
         self.clock = pygame.time.Clock()
         self.running = True
         self.waves = [
-            {"count": 5, "hp": 100, "speed": 100, "interval": 1.2, "path": settings.WAYPOINTS_1},
-            {"count": 10, "hp": 150, "speed": 120, "interval": 1.0, "path": settings.WAYPOINTS_2},
-            {"count": 15, "hp": 200, "speed": 150, "interval": 0.8, "path": settings.WAYPOINTS_3},
-            {"count": 20, "hp": 250, "speed": 170, "interval": 0.7, "path": settings.WAYPOINTS_1},
-            {"count": 25, "hp": 300, "speed": 200, "interval": 0.6, "path": settings.WAYPOINTS_2}
+            {
+                "normal_count": 5, "normal_hp": 100, "normal_speed": 100,
+             "tank_count": 0, "tank_hp": 0, "tank_speed": 0,
+              "interval": 1.2, "path": settings.WAYPOINTS_1
+              },
+            {
+                "normal_count": 10, "normal_hp": 80, "normal_speed": 130,
+             "tank_count": 2, "tank_hp": 300, "tank_speed": 70,
+              "interval": 1.0, "path": settings.WAYPOINTS_2
+              },
+            {
+                "normal_count": 15, "normal_hp": 150, "normal_speed": 130,
+             "tank_count": 5, "tank_hp": 500, "tank_speed": 60,
+              "interval": 0.8, "path": settings.WAYPOINTS_1
+              },
         ]
         self.current_wave_index = 0
         self.current_path = self.waves[self.current_wave_index]["path"]
@@ -226,15 +249,13 @@ class OutpostDefenseGame:
         self.wave_timer = self.wave_delay
         self.is_wave_active = False
 
-        self.credits = 150  # стартовые кредиты
+        self.credits = 50  # стартовые кредиты
         self.turret_cost = 50  # стоимость одной турели
         self.base_hp = 100  # хп аванпоста
         self.score = 0  # число уничтоженных жуков 
 
         self.state = "MENU"
 
-        orig_start = pygame.image.load("assets/start.png").convert_alpha()
-        self.start_img = pygame.transform.scale(orig_start, (250, 60))
         self.menu_font = pygame.font.SysFont("Arial", 36, bold=True)
         self.title_font = pygame.font.SysFont("Arial", 64, bold=True)
         center_x = settings.WIDTH // 2
@@ -248,10 +269,10 @@ class OutpostDefenseGame:
         self.logo_rect = self.logo_img.get_rect(center=(settings.WIDTH // 2, 150))
 
         orig_start = pygame.image.load("assets/start.png").convert_alpha()
-        self.start_img = pygame.transform.scale(orig_start, (280, 100))
+        self.start_img = pygame.transform.scale(orig_start, (280, 110))
         
         orig_start_hover = pygame.image.load("assets/start_hover.png").convert_alpha()
-        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 100))
+        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 110))
 
         orig_exit = pygame.image.load("assets/exit.png").convert_alpha()
         self.exit_img = pygame.transform.scale(orig_exit, (300, 130))
@@ -292,17 +313,27 @@ class OutpostDefenseGame:
         self.bugs_group = pygame.sprite.Group()
         self.bullets_group = pygame.sprite.Group()
 
-        self.credits = 150
+        self.credits = 50
         self.base_hp = 100
         self.score = 0
         
         self.current_wave_index = 0
         self.waves = [
-            {"count": 5, "hp": 100, "speed": 100, "interval": 1.2, "path": settings.WAYPOINTS_1},
-            {"count": 10, "hp": 150, "speed": 120, "interval": 1.0, "path": settings.WAYPOINTS_2},
-            {"count": 15, "hp": 200, "speed": 150, "interval": 0.8, "path": settings.WAYPOINTS_3},
-            {"count": 20, "hp": 250, "speed": 170, "interval": 0.7, "path": settings.WAYPOINTS_1},
-            {"count": 25, "hp": 300, "speed": 200, "interval": 0.6, "path": settings.WAYPOINTS_2}
+            {
+                "normal_count": 5, "normal_hp": 100, "normal_speed": 100,
+             "tank_count": 0, "tank_hp": 0, "tank_speed": 0,
+              "interval": 1.2, "path": settings.WAYPOINTS_1
+              },
+            {
+                "normal_count": 10, "normal_hp": 80, "normal_speed": 130,
+             "tank_count": 2, "tank_hp": 300, "tank_speed": 70,
+              "interval": 1.0, "path": settings.WAYPOINTS_2
+              },
+            {
+                "normal_count": 15, "normal_hp": 150, "normal_speed": 130,
+             "tank_count": 5, "tank_hp": 500, "tank_speed": 60,
+              "interval": 0.8, "path": settings.WAYPOINTS_1
+              },
         ]
         self.current_wave_data = self.waves[self.current_wave_index]
         self.current_path = self.current_wave_data["path"]
@@ -372,6 +403,74 @@ class OutpostDefenseGame:
                                 self.credits += self.turret_cost // 4
                                 print("Турель продана!")
                                 break
+                            
+    def start_next_wave(self):
+        self.is_wave_active = True
+        self.bugs_spawned = 0
+        self.bugs_finished = 0
+        
+        self.current_path = self.waves[self.current_wave_index]["path"]
+        self.current_wave_data = self.waves[self.current_wave_index]
+        self.outpost_rect.center = self.current_path[-1]
+
+        self.spawn_ochered = []
+        
+        for _ in range(self.current_wave_data["normal_count"]):
+            self.spawn_ochered.append(
+                {
+                    "type": "normal",
+                    "hp": self.current_wave_data["normal_hp"],
+                    "speed": self.current_wave_data["normal_speed"]
+                }
+            )
+        
+        for _ in range(self.current_wave_data["tank_count"]):
+            self.spawn_ochered.append(
+                {
+                    "type": "tank",
+                    "hp": self.current_wave_data["tank_hp"],
+                    "speed": self.current_wave_data["tank_speed"]
+                }
+            )
+        random.shuffle(self.spawn_ochered)
+        
+        self.сount_wave_bugs = len(self.spawn_ochered)
+        # если турель оказалась на пути врагов, то смещаем ее
+        for turret in list(self.turrets_group):
+            if not self._is_valid_position(turret.rect.center, ignore_turret=turret):
+                moved = False
+                
+                # ищем свободное место в радиусе от 1 до 3 клеток вокруг
+                for radius in range(1, 4):
+                    for dx in range(-radius, radius + 1):
+                        for dy in range(-radius, radius + 1):
+                            new_x = turret.rect.centerx + (dx * settings.TILE_SIZE)
+                            new_y = turret.rect.centery + (dy * settings.TILE_SIZE)
+                            new_pos = (new_x, new_y)
+
+                            # проверка клетки
+                            if self._is_valid_position(new_pos, ignore_turret=turret):
+                                turret.rect.center = new_pos
+                                turret.pos = pygame.math.Vector2(new_pos)
+                                moved = True
+                                break # прерываем цикл по dy
+                        if moved: 
+                            break # прерываем цикл по dx
+                    if moved: 
+                        break # прерываем цикл по radius
+
+                if not moved:
+                    turret.kill()
+                    print("Турель уничтожена!")
+
+    def end_wave(self):
+        self.is_wave_active = False
+        self.current_wave_index += 1
+        self.wave_timer = self.wave_delay
+
+        if self.current_wave_index >= len(self.waves):
+            print("Все волны отбиты!")
+            self.running = False
 
     def update(self, dt):
         if self.state != "PLAYING":
@@ -386,24 +485,35 @@ class OutpostDefenseGame:
             wave_data = self.waves[self.current_wave_index]
             
             # спавн жуков
-            if self.bugs_spawned < wave_data["count"]:
+            if self.bugs_spawned < self.сount_wave_bugs:
                 self.spawn_timer += dt
 
                 wave_data = self.waves[self.current_wave_index]
                 if self.spawn_timer >= wave_data["interval"]:
                     # Передаем текущий маршрут и усиленные статы
-                    AlienBug(
+                    bug = self.spawn_ochered[self.bugs_spawned]
+                    if bug["type"] == "tank":
+                        TankBug(
                         self.current_path, 
-                        wave_data["hp"],
-                        wave_data["speed"],
+                        bug["hp"],
+                        bug["speed"],
                         self.all_sprites,
                         self.bugs_group
                         )
+                    else:
+                        AlienBug(
+                            self.current_path, 
+                            bug["hp"],
+                            bug["speed"],
+                            self.all_sprites,
+                            self.bugs_group
+                            )
+                        
                     self.bugs_spawned += 1
                     self.spawn_timer = 0.0
 
             # проверка завершения волны
-            if self.bugs_finished >= wave_data["count"]:
+            if self.bugs_finished >= self.сount_wave_bugs:
                 self.end_wave()
 
         # обновление жуков и пуль
@@ -462,50 +572,7 @@ class OutpostDefenseGame:
 
         return True
     
-    def start_next_wave(self):
-        self.is_wave_active = True
-        self.bugs_spawned = 0
-        self.bugs_finished = 0
-        
-        self.current_path = self.waves[self.current_wave_index]["path"]
-        self.current_wave_data = self.waves[self.current_wave_index]
-        self.outpost_rect.center = self.current_path[-1]
-        # если турель оказалась на пути врагов, то смещаем ее
-        for turret in list(self.turrets_group):
-            if not self._is_valid_position(turret.rect.center, ignore_turret=turret):
-                moved = False
-                
-                # ищем свободное место в радиусе от 1 до 3 клеток вокруг
-                for radius in range(1, 4):
-                    for dx in range(-radius, radius + 1):
-                        for dy in range(-radius, radius + 1):
-                            new_x = turret.rect.centerx + (dx * settings.TILE_SIZE)
-                            new_y = turret.rect.centery + (dy * settings.TILE_SIZE)
-                            new_pos = (new_x, new_y)
-
-                            # проверка клетки
-                            if self._is_valid_position(new_pos, ignore_turret=turret):
-                                turret.rect.center = new_pos
-                                turret.pos = pygame.math.Vector2(new_pos)
-                                moved = True
-                                break # прерываем цикл по dy
-                        if moved: 
-                            break # прерываем цикл по dx
-                    if moved: 
-                        break # прерываем цикл по radius
-
-                if not moved:
-                    turret.kill()
-                    print("Турель уничтожена!")
-
-    def end_wave(self):
-        self.is_wave_active = False
-        self.current_wave_index += 1
-        self.wave_timer = self.wave_delay
-
-        if self.current_wave_index >= len(self.waves):
-            print("Все волны отбиты!")
-            self.running = False
+    
     
     def draw_grid_and_path(self):
         for x in range(0, settings.WIDTH, settings.TILE_SIZE):
