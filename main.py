@@ -46,6 +46,7 @@ class AlienBug(pygame.sprite.Sprite):
 
         self.speed = speed  # пикселей в секунду
         self.hp = hp
+        self.max_hp = hp
 
         self.reached_base = False  # флаг прорыва к аванпосту
 
@@ -219,13 +220,12 @@ class OutpostDefenseGame:
             {
                 "normal_count": 15, "normal_hp": 150, "normal_speed": 130,
              "tank_count": 5, "tank_hp": 500, "tank_speed": 60,
-              "interval": 0.8, "road": settings.WAYPOINTS_1
+              "interval": 0.8, "road": settings.WAYPOINTS_3
               },
         ]
         self.current_wave_index = 0
         self.current_road = self.waves[self.current_wave_index]["road"]
 
-        self.ui_font = pygame.font.SysFont("Arial", 22, bold=True)
 
         orig_bg_img = pygame.image.load("assets/game_bg.png").convert()
         self.background = pygame.transform.scale(orig_bg_img, (settings.WIDTH, settings.HEIGHT))
@@ -274,8 +274,10 @@ class OutpostDefenseGame:
 
         self.state = "MENU"
 
+        self.ui_font = pygame.font.SysFont("Arial", 22, bold=True)
         self.menu_font = pygame.font.SysFont("Arial", 36, bold=True)
         self.title_font = pygame.font.SysFont("Arial", 64, bold=True)
+        self.hp_font = pygame.font.SysFont("Arial", 12, bold=True)
         center_x = settings.WIDTH // 2
         btn_w, btn_h = 250, 60
 
@@ -290,13 +292,13 @@ class OutpostDefenseGame:
         self.start_img = pygame.transform.scale(orig_start, (280, 110))
         
         orig_start_hover = pygame.image.load("assets/start_hover.png").convert_alpha()
-        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 110))
+        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 120))
 
         orig_exit = pygame.image.load("assets/exit.png").convert_alpha()
-        self.exit_img = pygame.transform.scale(orig_exit, (300, 130))
+        self.exit_img = pygame.transform.scale(orig_exit, (280, 110))
 
         orig_exit_hover = pygame.image.load("assets/exit_hover.png").convert_alpha()
-        self.exit_hover_img = pygame.transform.scale(orig_exit_hover, (300, 130))
+        self.exit_hover_img = pygame.transform.scale(orig_exit_hover, (280, 120))
 
         orig_pause_img = pygame.image.load("assets/pause.png").convert_alpha()
         self.pause_img = pygame.transform.scale(orig_pause_img, (300, 130)) 
@@ -333,6 +335,7 @@ class OutpostDefenseGame:
 
         self.credits = 50
         self.base_hp = 100
+        self.max_base_hp = 100
         self.score = 0
         
         self.current_wave_index = 0
@@ -350,7 +353,7 @@ class OutpostDefenseGame:
             {
                 "normal_count": 15, "normal_hp": 150, "normal_speed": 130,
              "tank_count": 5, "tank_hp": 500, "tank_speed": 60,
-              "interval": 0.8, "road": settings.WAYPOINTS_1
+              "interval": 0.8, "road": settings.WAYPOINTS_3
               },
         ]
         self.current_wave_data = self.waves[self.current_wave_index]
@@ -362,7 +365,15 @@ class OutpostDefenseGame:
         self.wave_timer = 5.0
         self.is_wave_active = False
         self.spawn_timer = 0.0
+
+        self.notify_text = "" # всплывающие сообщения
+        self.notify_timer = 0.0
+        self.notify_time_len = 2.0
     
+    def show_notify(self, text):
+        self.notify_text = text
+        self.notify_timer = self.notify_time_len
+
     def start_game(self):
         self.reset_game()
         self.state = "PLAYING"
@@ -411,9 +422,9 @@ class OutpostDefenseGame:
                                 Turret(center_pos, self.all_sprites, self.turrets_group)
                                 self.credits -= self.turret_cost
                             else:
-                                print("Невозможно поставить турель в этой зоне!")
+                                self.show_notify("Невозможно поставить турель в этой зоне!")
                         else:
-                            print("Недостаточно кредитов")
+                            self.show_notify("Недостаточно кредитов")
                     
                     elif event.button == 3:
                         mouse_pos = event.pos
@@ -421,7 +432,7 @@ class OutpostDefenseGame:
                             if turret.rect.collidepoint(mouse_pos):
                                 turret.kill()
                                 self.credits += self.turret_cost // 4
-                                print("Турель продана!")
+                                self.show_notify("Турель продана!")
                                 break
                             
     def start_next_wave(self):
@@ -482,7 +493,7 @@ class OutpostDefenseGame:
 
                 if not moved:
                     turret.kill()
-                    print("Турель уничтожена!")
+                    self.show_notify("Турель уничтожена!")
 
     def end_wave(self):
         self.is_wave_active = False
@@ -497,6 +508,12 @@ class OutpostDefenseGame:
         if self.state != "PLAYING":
             return
         
+        # уведомления
+        if self.notify_timer > 0:
+            self.notify_timer -= dt
+            if self.notify_timer <= 0:
+                self.notify_text = ""
+
         # управление волнами
         if not self.is_wave_active:
             self.wave_timer -= dt
@@ -631,6 +648,46 @@ class OutpostDefenseGame:
             rect = img.get_rect(center=current)
             self.road_draw.append((img, rect))
 
+    def _draw_hp_bars(self):
+        if self.base_hp > 0:
+            bar_w, bar_h = 80, 8
+            fill = (self.base_hp / self.max_base_hp) * bar_w
+            
+            outline_rect = pygame.Rect(0, 0, bar_w, bar_h)
+            outline_rect.centerx = self.outpost_rect.centerx
+            outline_rect.bottom = self.outpost_rect.top - 10
+
+            fill_rect = pygame.Rect(outline_rect.x, outline_rect.y, fill, bar_h)
+
+            pygame.draw.rect(self.screen, (150, 0, 0), outline_rect)
+            pygame.draw.rect(self.screen, (0, 200, 0), fill_rect)
+            pygame.draw.rect(self.screen, (0, 0, 0), outline_rect, 1)
+
+            hp_text = self.hp_font.render(str(int(self.base_hp)), True, settings.COLOR_TEXT)
+            hp_rect = hp_text.get_rect(midleft=(outline_rect.left - 25, outline_rect.centery))
+            self.screen.blit(hp_text, hp_rect)
+        
+        for bug in self.bugs_group:
+            if bug.hp > 0:
+                bar_w, bar_h = 40, 5
+                
+                current_hp = max(0, bug.hp)
+                fill = (current_hp / bug.max_hp) * bar_w
+                
+                outline_rect = pygame.Rect(0, 0, bar_w, bar_h)
+                outline_rect.centerx = bug.rect.centerx
+                outline_rect.bottom = bug.rect.top - 5
+                
+                fill_rect = pygame.Rect(outline_rect.x, outline_rect.y, fill, bar_h)
+
+                pygame.draw.rect(self.screen, (150, 0, 0), outline_rect)
+                pygame.draw.rect(self.screen, (0, 200, 0), fill_rect)
+                pygame.draw.rect(self.screen, (0, 0, 0), outline_rect, 1)
+
+                hp_text = self.hp_font.render(str(int(current_hp)), True, settings.COLOR_TEXT)
+                hp_rect = hp_text.get_rect(midleft=(outline_rect.left - 25, outline_rect.centery))
+                self.screen.blit(hp_text, hp_rect)  
+            
     def draw_grid_and_road(self):
         self.screen.blit(self.background, (0, 0))
 
@@ -647,6 +704,7 @@ class OutpostDefenseGame:
         if self.state in ["PLAYING", "PAUSED", "GAME_OVER"]:
             self.draw_grid_and_road()
             self.all_sprites.draw(self.screen)
+            self._draw_hp_bars()
             self.draw_ui()
 
         if self.state == "MENU":
@@ -698,6 +756,30 @@ class OutpostDefenseGame:
         self.screen.blit(score_surface, (380, 8))
         self.screen.blit(cost_surface, (590, 8))
         self.screen.blit(wave_surface, (760, 8))
+
+        if self.notify_text:
+            notif_surf = self.ui_font.render(self.notify_text, True, (255, 100, 100))
+            
+            notif_rect = notif_surf.get_rect(center=(settings.WIDTH // 2, 60))
+            
+            bg_rect = notif_rect.inflate(20, 10)
+            pygame.draw.rect(self.screen, (0, 0, 0, 150), bg_rect, border_radius=5)
+            
+            self.screen.blit(notif_surf, notif_rect)
+        
+        if not self.is_wave_active:
+            if self.current_wave_index == 0:
+                timer_text = f"НАЧАЛО ЧЕРЕЗ: {max(0, self.wave_timer):.0f} СЕК"
+            else:
+                timer_text = f"СЛЕДУЮЩАЯ ВОЛНА ЧЕРЕЗ: {max(0, self.wave_timer):.0f} СЕК"
+            timer_surf = self.ui_font.render(timer_text, True, (0, 0, 0)) 
+            timer_rect = timer_surf.get_rect(center=(settings.WIDTH // 2, 120))
+            timer_bg = timer_rect.inflate(30, 15)
+            
+            pygame.draw.rect(self.screen, (240, 220, 140, 180), timer_bg, border_radius=8)
+            pygame.draw.rect(self.screen, (0, 0, 0), timer_bg, 2, border_radius=8) 
+            
+            self.screen.blit(timer_surf, timer_rect)
 
     def run(self):
         while self.running:
