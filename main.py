@@ -38,15 +38,16 @@ class OutpostDefenseGame:
         self.music_enabled = True
         self.sfx_enabled = True
 
-        #pygame.mixer.music.load("путь фоновой музыки")
-        #pygame.mixer.music.play(-1)
+        pygame.mixer.music.load("assets/sounds/post_apocalyptic.mp3")
+        pygame.mixer.music.play(-1)
+        pygame.mixer.music.set_volume(0.5)
 
-        self.sound_shoot = pygame.mixer.Sound("assets/shoot.wav")
-        #self.sound_hit = pygame.mixer.Sound("путь звука урона по базе")
+        self.sound_shoot = pygame.mixer.Sound("assets/sounds/laserLarge_002_(shoot).ogg")
+        self.sound_hit = pygame.mixer.Sound("assets/sounds/Heavy Magical Explosion_SI 03_base_damage.wav")
         #self.sound_gameover = pygame.mixer.Sound("путь звука конца игры")
 
-        self.sound_shoot.set_volume(0.3)
-        #self.sound_hit.set_volume(0.3)
+        self.sound_shoot.set_volume(0.15)
+        self.sound_hit.set_volume(0.2)
         #self.sound_gameover.set_volume(0.5)
 
         orig_bg_img = pygame.image.load("assets/game_bg.png").convert()
@@ -108,23 +109,45 @@ class OutpostDefenseGame:
 
         orig_logo = pygame.image.load("assets/logo.png").convert_alpha()
         self.logo_img = pygame.transform.scale(orig_logo, (400, 230)) 
-        self.logo_rect = self.logo_img.get_rect(center=(settings.WIDTH // 2, 150))
+        self.logo_rect = self.logo_img.get_rect(center=(settings.WIDTH // 2, 140))
 
         orig_start = pygame.image.load("assets/start.png").convert_alpha()
-        self.start_img = pygame.transform.scale(orig_start, (280, 120))
+        self.start_img = pygame.transform.scale(orig_start, (280, 125))
         
         orig_start_hover = pygame.image.load("assets/start_hover.png").convert_alpha()
         self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 125))
 
         orig_exit = pygame.image.load("assets/exit.png").convert_alpha()
-        self.exit_img = pygame.transform.scale(orig_exit, (280, 120))
+        self.exit_img = pygame.transform.scale(orig_exit, (280, 125))
 
         orig_exit_hover = pygame.image.load("assets/exit_hover.png").convert_alpha()
         self.exit_hover_img = pygame.transform.scale(orig_exit_hover, (280, 125))
 
         orig_pause_img = pygame.image.load("assets/pause.png").convert_alpha()
         self.pause_img = pygame.transform.scale(orig_pause_img, (300, 130)) 
-        self.pause_rect = self.pause_img.get_rect(center=(settings.WIDTH // 2, 150))
+        self.pause_rect = self.pause_img.get_rect(center=(settings.WIDTH // 2, 130))
+
+        orig_continue_img = pygame.image.load("assets/continue.png").convert_alpha()
+        self.continue_img = pygame.transform.scale(orig_continue_img, (300, 120))
+
+        orig_continue_hover = pygame.image.load("assets/continue_hover.png").convert_alpha()
+        self.continue_hover_img = pygame.transform.scale(orig_continue_hover, (300, 120))
+
+        orig_menu = pygame.image.load("assets/menu.png").convert_alpha()
+        self.menu_img = pygame.transform.scale(orig_menu, (300, 120))
+
+        orig_menu_hover = pygame.image.load("assets/menu_hover.png").convert_alpha()
+        self.menu_hover_img = pygame.transform.scale(orig_menu_hover, (300, 120))
+
+        orig_music_on = pygame.image.load("assets/music_on.png").convert_alpha()
+        orig_music_off = pygame.image.load("assets/music_off.png").convert_alpha()
+        self.orig_music_on_img = pygame.transform.scale(orig_music_on, (100, 100))
+        self.orig_music_off_img = pygame.transform.scale(orig_music_off, (100, 100))
+
+        orig_music_on_hover = pygame.image.load("assets/music_on_hover.png").convert_alpha()
+        orig_music_off_hover = pygame.image.load("assets/music_off_hover.png").convert_alpha()
+        self.orig_music_on_hover_img = pygame.transform.scale(orig_music_on_hover, (100, 100))
+        self.orig_music_off_hover_img = pygame.transform.scale(orig_music_off_hover, (100, 100))
 
         self.btn_start = ImageButton(
             x=center_x,
@@ -141,16 +164,45 @@ class OutpostDefenseGame:
             hover_image=self.exit_hover_img,
             action=self.quit_game
         )
+
+        self.btn_continue = ImageButton(
+            x = center_x,
+            y = 250,
+            image=self.continue_img,
+            hover_image=self.continue_hover_img,
+            action=self.pause
+        )
+        
+        self.btn_menu = ImageButton(
+            x = center_x,
+            y = 390,
+            image=self.menu_img,
+            hover_image=self.menu_hover_img,
+            action=self.menu
+        )
+
+        self.menu_btn_music = ImageButton(
+            x=75, 
+            y=settings.HEIGHT - 70, 
+            image=self.orig_music_on_img, 
+            hover_image=self.orig_music_on_hover_img, 
+            action=self.toggle_music
+        )
+
+        self.btn_music = ImageButton(
+            x=center_x - 50, 
+            y=450, 
+            image=self.orig_music_on_img, 
+            hover_image=self.orig_music_on_hover_img, 
+            action=self.toggle_music
+        )
+
         sm_w, sm_h = 180, 45
         
-        self.menu_btn_music = Button(20, settings.HEIGHT - 65, sm_w, sm_h, "МУЗЫКА: ВКЛ", self.hp_font, self.toggle_music)
         self.menu_btn_sfx = Button(settings.WIDTH - 200, settings.HEIGHT - 65, sm_w, sm_h, "ЗВУКИ: ВКЛ", self.hp_font, self.toggle_sfx)
 
         left_x = center_x - btn_w // 2
         
-        self.btn_resume = Button(left_x, 250, btn_w, btn_h, "ПРОДОЛЖИТЬ", self.menu_font, self.pause)
-        self.btn_menu = Button(left_x, 340, btn_w, btn_h, "В ГЛАВНОЕ МЕНЮ", self.menu_font, self.menu)
-        self.btn_music = Button(left_x, 430, btn_w, btn_h, "МУЗЫКА: ВКЛ", self.menu_font, self.toggle_music)
         self.btn_sfx = Button(left_x, 520, btn_w, btn_h, "ЗВУКИ: ВКЛ", self.menu_font, self.toggle_sfx)
         
         self.reset_game()
@@ -230,7 +282,7 @@ class OutpostDefenseGame:
                 self.menu_btn_music.handle_event(event)
                 self.menu_btn_sfx.handle_event(event)
             elif self.state == "PAUSED":
-                self.btn_resume.handle_event(event)
+                self.btn_continue.handle_event(event)
                 self.btn_menu.handle_event(event)
                 self.btn_music.handle_event(event)
                 self.btn_sfx.handle_event(event)
@@ -329,6 +381,7 @@ class OutpostDefenseGame:
             if bug.reached_base:
                 self.base_hp -= 10
                 self.bugs_finished += 1
+                self.play_sound(self.sound_hit)
                 bug.kill()
                 if self.base_hp < 0:
                     self.base_hp = 0
@@ -462,7 +515,7 @@ class OutpostDefenseGame:
             self.screen.blit(overlay, (0, 0))
             self.screen.blit(self.pause_img, self.pause_rect)
         
-            self.btn_resume.draw(self.screen)
+            self.btn_continue.draw(self.screen)
             self.btn_menu.draw(self.screen)
             self.btn_music.draw(self.screen)
             self.btn_sfx.draw(self.screen)
@@ -636,12 +689,15 @@ class OutpostDefenseGame:
         self.music_enabled = not self.music_enabled
         if self.music_enabled:
             pygame.mixer.music.unpause()
+            new_img = self.orig_music_on_img
         else:
             pygame.mixer.music.pause()
+            new_img = self.orig_music_off_img
             
-        status = "ВКЛ" if self.music_enabled else "ВЫКЛ"
-        self.btn_music.text = f"МУЗЫКА: {status}"
-        self.menu_btn_music.text = f"МУЗЫКА: {status}"
+        self.btn_music.image = new_img
+        self.btn_music.hover_image = new_img
+        self.menu_btn_music.image = new_img
+        self.menu_btn_music.hover_image = new_img
 
     # звуковые эффекты
     def toggle_sfx(self):
