@@ -2,206 +2,15 @@ import pygame
 import sys
 import settings
 import random
+from sprites import Bullet, AlienBug, TankBug, Turret
+from ui import Button, ImageButton
 
-class Bullet(pygame.sprite.Sprite):
-    def __init__(self, start_pos, target_pos, damage, *groups):
-        super().__init__(*groups)
-        self.image = pygame.Surface((6, 6), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, settings.COLOR_BULLET, (3, 3), 3)
-        self.rect = self.image.get_rect(center=start_pos)
-
-        self.pos = pygame.math.Vector2(start_pos)
-        self.damage = damage
-        self.speed = 600
-
-        target_vect = pygame.math.Vector2(target_pos)
-        direction = target_vect - self.pos
-        if direction.length() > 0:
-            self.direction = direction.normalize()
-        else:
-            self.direction = pygame.math.Vector2(1, 0)
-
-    def update(self, dt):
-        self.pos += self.direction * self.speed * dt
-        self.rect.center = (round(self.pos.x), round(self.pos.y))
-        if not (
-            0 <= self.rect.x <= settings.WIDTH and 0 <= self.rect.y <= settings.HEIGHT
-        ):  # если пуля улетает за экран, удаляем ее
-            self.kill()
-
-
-class AlienBug(pygame.sprite.Sprite):
-    def __init__(self, waypoints, hp, speed, *groups):
-        super().__init__(*groups)
-        orig_image = pygame.image.load("assets/bug.png").convert_alpha()
-        self.image = pygame.transform.scale(orig_image, (50, 50))
-        self.rect = self.image.get_rect()
-
-        self.waypoints = waypoints
-        self.current_wp_index = 0
-
-        # Начальная позиция - первый вейпоинт
-        self.pos = pygame.math.Vector2(self.waypoints[self.current_wp_index])
-        self.rect.center = (round(self.pos.x), round(self.pos.y))
-
-        self.speed = speed  # пикселей в секунду
-        self.hp = hp
-        self.max_hp = hp
-
-        self.reached_base = False  # флаг прорыва к аванпосту
-
-    def take_damage(self, amount):
-        self.hp -= amount
-        if self.hp <= 0:
-            self.kill()
-            return True
-        return False
-
-    def update(self, dt):
-        # Если достигли конца маршрута (аванпоста)
-        if self.current_wp_index >= len(self.waypoints):
-            self.reached_base = True
-            return
-
-        # Берем текущую цель
-        target = pygame.math.Vector2(self.waypoints[self.current_wp_index])
-        direction = target - self.pos
-        distance = direction.length()
-
-        # Шаг движения за этот кадр
-        move_step = self.speed * dt
-
-        if distance <= move_step:
-            # Если шаг перепрыгивает цель, просто ставим жука точно в цель
-            self.pos = target
-            self.current_wp_index += 1  # Переключаемся на следующую точку
-        else:
-            # Иначе двигаемся в сторону цели
-            direction = direction.normalize()
-            self.pos += direction * move_step
-
-        self.rect.center = (round(self.pos.x), round(self.pos.y))
-
-class TankBug(AlienBug):
-    def __init__(self, waypoints, hp, speed, *groups):
-        super().__init__(waypoints, hp, speed, *groups)
-
-        orig_image = pygame.image.load("assets/TankBug.png").convert_alpha()
-        self.image = pygame.transform.scale(orig_image, (75, 75))
-        self.rect = self.image.get_rect()
-        self.rect.center = (round(self.pos.x), round(self.pos.y))
-
-    def take_damage(self, amount):
-        damage = max(1, amount - 10)
-        return super().take_damage(damage)
-    
-
-class Turret(pygame.sprite.Sprite):
-    def __init__(self, pos, *groups):
-        super().__init__(*groups)
-
-        img_front = pygame.image.load("assets/turret_front.png").convert_alpha()
-        img_back = pygame.image.load("assets/turret_back.png").convert_alpha()
-        self.image_front = pygame.transform.scale(img_front, (50, 50))
-        self.image_back = pygame.transform.scale(img_back, (50, 50))
-        self.image = self.image_front
-        self.rect = self.image.get_rect(center=pos)
-        self.pos = pygame.Vector2(pos)
-
-        self.radius = 125  # радиус обзора
-        self.target = None  # цель
-
-        # характеристики для стрельбы
-        self.damage = 35  # урон за один выстрел
-        self.cooldown = 0.4  # задержка между выстрелами
-        self.shoot_timer = 0.0
-
-    def find_target(self, bugs_group):
-        closest_bug = None
-        min_dist = self.radius
-
-        for bug in bugs_group:
-            dist = self.pos.distance_to(bug.rect.center)
-            if dist < min_dist:
-                min_dist = dist
-                closest_bug = bug
-
-        return closest_bug
-
-    def update(self, dt, bugs_group, all_sprites, bullets_group):
-        self.target = self.find_target(bugs_group)  # находим цель
-        self.shoot_timer += dt  # обновляем таймер перезарядки
-        if self.target and self.shoot_timer >= self.cooldown:
-            Bullet(
-                self.rect.center,
-                self.target.rect.center,
-                self.damage,
-                all_sprites,
-                bullets_group,
-            )
-            self.shoot_timer = 0.0
-
-        # меняем картинку турели в зависимости от позиции врага
-        if self.target:
-            if self.target.rect.centery < self.rect.centery:
-                self.image = self.image_back
-            else:
-                self.image = self.image_front
-
-
-class Button:
-    def __init__(self, x, y, width, height, text, font, action=None):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.font = font
-        self.action = action
-        
-        # цвета-заглушки (пока нет картинок)
-        self.color = (50, 50, 50)
-        self.hover_color = (100, 100, 100)
-        self.text_color = settings.COLOR_TEXT
-        self.is_hovered = False
-
-    def draw(self, surface):
-        color = self.hover_color if self.is_hovered else self.color
-        pygame.draw.rect(surface, color, self.rect, border_radius=8)
-        pygame.draw.rect(surface, (150, 150, 150), self.rect, 2, border_radius=8)
-        
-        text_surf = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEMOTION:
-            self.is_hovered = self.rect.collidepoint(event.pos)
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.is_hovered and self.action:
-                self.action()
-
-class ImageButton:
-    def __init__(self, x, y, image, hover_image=None, action=None):
-        self.image = image
-        self.hover_image = hover_image if hover_image else image 
-        self.rect = self.image.get_rect(center=(x, y)) 
-        
-        self.action = action
-        self.is_hovered = False
-
-    def draw(self, surface):
-        current_image = self.hover_image if self.is_hovered else self.image
-        surface.blit(current_image, self.rect)
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEMOTION:
-            self.is_hovered = self.rect.collidepoint(event.pos)
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.is_hovered and self.action:
-                self.action()
 
 class OutpostDefenseGame:
     def __init__(self):
         pygame.init()
         pygame.font.init()
+        pygame.mixer.init()
         self.screen = pygame.display.set_mode((settings.WIDTH, settings.HEIGHT))
         pygame.display.set_caption("Whiskey Outpost")
         self.clock = pygame.time.Clock()
@@ -226,6 +35,19 @@ class OutpostDefenseGame:
         self.current_wave_index = 0
         self.current_road = self.waves[self.current_wave_index]["road"]
 
+        self.music_enabled = True
+        self.sfx_enabled = True
+
+        #pygame.mixer.music.load("путь фоновой музыки")
+        #pygame.mixer.music.play(-1)
+
+        self.sound_shoot = pygame.mixer.Sound("assets/shoot.wav")
+        #self.sound_hit = pygame.mixer.Sound("путь звука урона по базе")
+        #self.sound_gameover = pygame.mixer.Sound("путь звука конца игры")
+
+        self.sound_shoot.set_volume(0.3)
+        #self.sound_hit.set_volume(0.3)
+        #self.sound_gameover.set_volume(0.5)
 
         orig_bg_img = pygame.image.load("assets/game_bg.png").convert()
         self.background = pygame.transform.scale(orig_bg_img, (settings.WIDTH, settings.HEIGHT))
@@ -289,16 +111,16 @@ class OutpostDefenseGame:
         self.logo_rect = self.logo_img.get_rect(center=(settings.WIDTH // 2, 150))
 
         orig_start = pygame.image.load("assets/start.png").convert_alpha()
-        self.start_img = pygame.transform.scale(orig_start, (280, 110))
+        self.start_img = pygame.transform.scale(orig_start, (280, 120))
         
         orig_start_hover = pygame.image.load("assets/start_hover.png").convert_alpha()
-        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 120))
+        self.start_hover_img = pygame.transform.scale(orig_start_hover, (280, 125))
 
         orig_exit = pygame.image.load("assets/exit.png").convert_alpha()
-        self.exit_img = pygame.transform.scale(orig_exit, (280, 110))
+        self.exit_img = pygame.transform.scale(orig_exit, (280, 120))
 
         orig_exit_hover = pygame.image.load("assets/exit_hover.png").convert_alpha()
-        self.exit_hover_img = pygame.transform.scale(orig_exit_hover, (280, 120))
+        self.exit_hover_img = pygame.transform.scale(orig_exit_hover, (280, 125))
 
         orig_pause_img = pygame.image.load("assets/pause.png").convert_alpha()
         self.pause_img = pygame.transform.scale(orig_pause_img, (300, 130)) 
@@ -314,15 +136,22 @@ class OutpostDefenseGame:
         
         self.btn_quit = ImageButton(
             x = center_x,
-            y = 410,
+            y = 420,
             image=self.exit_img,
             hover_image=self.exit_hover_img,
             action=self.quit_game
         )
+        sm_w, sm_h = 180, 45
+        
+        self.menu_btn_music = Button(20, settings.HEIGHT - 65, sm_w, sm_h, "МУЗЫКА: ВКЛ", self.hp_font, self.toggle_music)
+        self.menu_btn_sfx = Button(settings.WIDTH - 200, settings.HEIGHT - 65, sm_w, sm_h, "ЗВУКИ: ВКЛ", self.hp_font, self.toggle_sfx)
+
         left_x = center_x - btn_w // 2
         
         self.btn_resume = Button(left_x, 250, btn_w, btn_h, "ПРОДОЛЖИТЬ", self.menu_font, self.pause)
         self.btn_menu = Button(left_x, 340, btn_w, btn_h, "В ГЛАВНОЕ МЕНЮ", self.menu_font, self.menu)
+        self.btn_music = Button(left_x, 430, btn_w, btn_h, "МУЗЫКА: ВКЛ", self.menu_font, self.toggle_music)
+        self.btn_sfx = Button(left_x, 520, btn_w, btn_h, "ЗВУКИ: ВКЛ", self.menu_font, self.toggle_sfx)
         
         self.reset_game()
     
@@ -370,10 +199,6 @@ class OutpostDefenseGame:
         self.notify_timer = 0.0
         self.notify_time_len = 2.0
     
-    def show_notify(self, text):
-        self.notify_text = text
-        self.notify_timer = self.notify_time_len
-
     def start_game(self):
         self.reset_game()
         self.state = "PLAYING"
@@ -402,10 +227,16 @@ class OutpostDefenseGame:
             if self.state == "MENU":
                 self.btn_start.handle_event(event)
                 self.btn_quit.handle_event(event)
+                self.menu_btn_music.handle_event(event)
+                self.menu_btn_sfx.handle_event(event)
             elif self.state == "PAUSED":
                 self.btn_resume.handle_event(event)
                 self.btn_menu.handle_event(event)
+                self.btn_music.handle_event(event)
+                self.btn_sfx.handle_event(event)
             elif self.state == "GAME_OVER":
+                self.btn_menu.handle_event(event)
+            elif self.state == "VICTORY":
                 self.btn_menu.handle_event(event)
             elif self.state == "PLAYING":
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -434,7 +265,91 @@ class OutpostDefenseGame:
                                 self.credits += self.turret_cost // 4
                                 self.show_notify("Турель продана!")
                                 break
-                            
+
+    def update(self, dt):
+        if self.state != "PLAYING":
+            return
+        
+        # уведомления
+        if self.notify_timer > 0:
+            self.notify_timer -= dt
+            if self.notify_timer <= 0:
+                self.notify_text = ""
+
+        # управление волнами
+        if not self.is_wave_active:
+            self.wave_timer -= dt
+            if self.wave_timer <= 0:
+                self.start_next_wave()
+        else:
+            wave_data = self.waves[self.current_wave_index]
+            
+            # спавн жуков
+            if self.bugs_spawned < self.сount_wave_bugs:
+                self.spawn_timer += dt
+
+                wave_data = self.waves[self.current_wave_index]
+                if self.spawn_timer >= wave_data["interval"]:
+                    # Передаем текущий маршрут и усиленные статы
+                    bug = self.spawn_ochered[self.bugs_spawned]
+                    if bug["type"] == "tank":
+                        TankBug(
+                        self.current_road, 
+                        bug["hp"],
+                        bug["speed"],
+                        self.all_sprites,
+                        self.bugs_group
+                        )
+                    else:
+                        AlienBug(
+                            self.current_road, 
+                            bug["hp"],
+                            bug["speed"],
+                            self.all_sprites,
+                            self.bugs_group
+                            )
+                        
+                    self.bugs_spawned += 1
+                    self.spawn_timer = 0.0
+
+            # проверка завершения волны
+            if self.bugs_finished >= self.сount_wave_bugs:
+                self.end_wave()
+
+        # обновление жуков и пуль
+        self.bugs_group.update(dt)
+        self.bullets_group.update(dt)
+
+        # обновление турелей
+        for turret in self.turrets_group:
+            turret.update(dt, self.bugs_group, self.all_sprites, self.play_sound,  self.sound_shoot, self.bullets_group)
+
+        # проверка нанес ли жук урон по базе
+        for bug in list(self.bugs_group):
+            if bug.reached_base:
+                self.base_hp -= 10
+                self.bugs_finished += 1
+                bug.kill()
+                if self.base_hp < 0:
+                    self.base_hp = 0
+
+        # обработка попаданий
+        # False означает "не удалять жука автоматически"
+        # True означает "удалить пулю при попадании"
+        hits = pygame.sprite.groupcollide(
+            self.bugs_group, self.bullets_group, False, True
+        )
+
+        for bug, bullets in hits.items():
+            for bullet in bullets:
+                if bug.take_damage(bullet.damage):
+                    self.credits += bug.reward
+                    self.score += bug.score_value
+                    self.bugs_finished += 1
+                
+        if self.base_hp <= 0:
+            self.state = "GAME_OVER"
+
     def start_next_wave(self):
         self.is_wave_active = True
         self.bugs_spawned = 0
@@ -501,93 +416,8 @@ class OutpostDefenseGame:
         self.wave_timer = self.wave_delay
 
         if self.current_wave_index >= len(self.waves):
-            print("Все волны отбиты!")
-            self.running = False
+            self.state = "VICTORY"
 
-    def update(self, dt):
-        if self.state != "PLAYING":
-            return
-        
-        # уведомления
-        if self.notify_timer > 0:
-            self.notify_timer -= dt
-            if self.notify_timer <= 0:
-                self.notify_text = ""
-
-        # управление волнами
-        if not self.is_wave_active:
-            self.wave_timer -= dt
-            if self.wave_timer <= 0:
-                self.start_next_wave()
-        else:
-            wave_data = self.waves[self.current_wave_index]
-            
-            # спавн жуков
-            if self.bugs_spawned < self.сount_wave_bugs:
-                self.spawn_timer += dt
-
-                wave_data = self.waves[self.current_wave_index]
-                if self.spawn_timer >= wave_data["interval"]:
-                    # Передаем текущий маршрут и усиленные статы
-                    bug = self.spawn_ochered[self.bugs_spawned]
-                    if bug["type"] == "tank":
-                        TankBug(
-                        self.current_road, 
-                        bug["hp"],
-                        bug["speed"],
-                        self.all_sprites,
-                        self.bugs_group
-                        )
-                    else:
-                        AlienBug(
-                            self.current_road, 
-                            bug["hp"],
-                            bug["speed"],
-                            self.all_sprites,
-                            self.bugs_group
-                            )
-                        
-                    self.bugs_spawned += 1
-                    self.spawn_timer = 0.0
-
-            # проверка завершения волны
-            if self.bugs_finished >= self.сount_wave_bugs:
-                self.end_wave()
-
-        # обновление жуков и пуль
-        self.bugs_group.update(dt)
-        self.bullets_group.update(dt)
-
-        # обновление турелей
-        for turret in self.turrets_group:
-            turret.update(dt, self.bugs_group, self.all_sprites, self.bullets_group)
-
-        # проверка нанес ли жук урон по базе
-        for bug in list(self.bugs_group):
-            if bug.reached_base:
-                self.base_hp -= 10
-                self.bugs_finished += 1
-                bug.kill()
-                if self.base_hp < 0:
-                    self.base_hp = 0
-
-        # обработка попаданий
-        # False означает "не удалять жука автоматически"
-        # True означает "удалить пулю при попадании"
-        hits = pygame.sprite.groupcollide(
-            self.bugs_group, self.bullets_group, False, True
-        )
-
-        for bug, bullets in hits.items():
-            for bullet in bullets:
-                if bug.take_damage(bullet.damage):
-                    self.credits += 15
-                    self.score += 1
-                    self.bugs_finished += 1
-                
-        if self.base_hp <= 0:
-            self.state = "GAME_OVER"
-    
     def _is_valid_position(self, center_pos, ignore_turret=None):
         grid_x = center_pos[0] - settings.TILE_SIZE // 2
         grid_y = center_pos[1] - settings.TILE_SIZE // 2
@@ -609,7 +439,59 @@ class OutpostDefenseGame:
             return False
 
         return True
-    
+
+    def draw(self):
+        if self.state in ["PLAYING", "PAUSED", "GAME_OVER", "VICTORY"]:
+            self.draw_grid_and_road()
+            self.all_sprites.draw(self.screen)
+            self._draw_hp_bars()
+            self.draw_ui()
+
+        if self.state == "MENU":
+            self.screen.blit(self.menu_bg_img, (0, 0))
+            self.screen.blit(self.logo_img, self.logo_rect)
+            self.btn_start.draw(self.screen)
+            self.btn_quit.draw(self.screen)
+            self.menu_btn_music.draw(self.screen)
+            self.menu_btn_sfx.draw(self.screen)
+
+        elif self.state == "PAUSED":
+            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
+            overlay.set_alpha(150)
+            overlay.fill((0, 0, 0))
+            self.screen.blit(overlay, (0, 0))
+            self.screen.blit(self.pause_img, self.pause_rect)
+        
+            self.btn_resume.draw(self.screen)
+            self.btn_menu.draw(self.screen)
+            self.btn_music.draw(self.screen)
+            self.btn_sfx.draw(self.screen)
+
+        elif self.state == "GAME_OVER":
+            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill((50, 0, 0))
+            self.screen.blit(overlay, (0, 0))
+            
+            go_surf = self.title_font.render("АВАНПОСТ УНИЧТОЖЕН!", True, (255, 50, 50))
+            self.screen.blit(go_surf, go_surf.get_rect(center=(settings.WIDTH//2, 150)))
+            self.btn_menu.draw(self.screen)
+
+        elif self.state == "VICTORY":
+            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill((0, 40, 0))
+            self.screen.blit(overlay, (0, 0))
+            
+            vic_surf = self.title_font.render("ВСЕ ВОЛНЫ ОТБИТЫ!", True, (255, 215, 0))
+            self.screen.blit(vic_surf, vic_surf.get_rect(center=(settings.WIDTH//2, 150)))
+            
+            score_surf = self.menu_font.render(f"Итоговый счет: {self.score}", True, (255, 255, 255))
+            self.screen.blit(score_surf, score_surf.get_rect(center=(settings.WIDTH//2, 230)))
+            self.btn_menu.draw(self.screen)
+
+        pygame.display.flip()
+
     # рисовка графики дороги
     def _draw_road_graphics(self):
         self.road_draw = []
@@ -686,8 +568,8 @@ class OutpostDefenseGame:
 
                 hp_text = self.hp_font.render(str(int(current_hp)), True, settings.COLOR_TEXT)
                 hp_rect = hp_text.get_rect(midleft=(outline_rect.left - 25, outline_rect.centery))
-                self.screen.blit(hp_text, hp_rect)  
-            
+                self.screen.blit(hp_text, hp_rect)
+
     def draw_grid_and_road(self):
         self.screen.blit(self.background, (0, 0))
 
@@ -700,61 +582,25 @@ class OutpostDefenseGame:
 
         self.screen.blit(self.outpost_img, self.outpost_rect)
 
-    def draw(self):
-        if self.state in ["PLAYING", "PAUSED", "GAME_OVER"]:
-            self.draw_grid_and_road()
-            self.all_sprites.draw(self.screen)
-            self._draw_hp_bars()
-            self.draw_ui()
-
-        if self.state == "MENU":
-            self.screen.blit(self.menu_bg_img, (0, 0))
-            self.screen.blit(self.logo_img, self.logo_rect)
-            self.btn_start.draw(self.screen)
-            self.btn_quit.draw(self.screen)
-
-        elif self.state == "PAUSED":
-            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
-            overlay.set_alpha(150)
-            overlay.fill((0, 0, 0))
-            self.screen.blit(overlay, (0, 0))
-            self.screen.blit(self.pause_img, self.pause_rect)
-        
-            self.btn_resume.draw(self.screen)
-            self.btn_menu.draw(self.screen)
-
-        elif self.state == "GAME_OVER":
-            overlay = pygame.Surface((settings.WIDTH, settings.HEIGHT))
-            overlay.set_alpha(200)
-            overlay.fill((50, 0, 0))
-            self.screen.blit(overlay, (0, 0))
-            
-            go_surf = self.title_font.render("АВАНПОСТ УНИЧТОЖЕН!", True, (255, 50, 50))
-            self.screen.blit(go_surf, go_surf.get_rect(center=(settings.WIDTH//2, 150)))
-            self.btn_menu.draw(self.screen)
-
-        pygame.display.flip()
-
     def draw_ui(self):
         pygame.draw.rect(self.screen, settings.COLOR_UI_BAR, (0, 0, settings.WIDTH, 40))
         hp_text = f"АВАНПОСТ: {self.base_hp}"
         credits_text = f"КРЕДИТЫ: ${self.credits}"
-        score_text = f"УНИЧТОЖЕНИЕ: {self.score}"
         cost_text = f"ТУРРЕЛЬ: ${self.turret_cost}"
         wave_text = f"ВОЛНА: {self.current_wave_index + 1}/{len(self.waves)}"
+        score_text = self.ui_font.render(f"СЧЕТ: {self.score}", True, (255, 255, 255))
 
         hp_surface = self.ui_font.render(
             hp_text, True, (255, 50, 50) if self.base_hp <= 30 else settings.COLOR_TEXT
         )
         credits_surface = self.ui_font.render(credits_text, True, (0, 128, 0))
-        score_surface = self.ui_font.render(score_text, True, settings.COLOR_TEXT)
         cost_surface = self.ui_font.render(cost_text, True, (150, 150, 150))
         wave_surface = self.ui_font.render(wave_text, True, (255, 200, 0))
 
         self.screen.blit(hp_surface, (20, 8))
-        self.screen.blit(credits_surface, (200, 8))
-        self.screen.blit(score_surface, (380, 8))
-        self.screen.blit(cost_surface, (590, 8))
+        self.screen.blit(credits_surface, (220, 8))
+        self.screen.blit(score_text, (430, 8))
+        self.screen.blit(cost_surface, (570, 8))
         self.screen.blit(wave_surface, (760, 8))
 
         if self.notify_text:
@@ -780,6 +626,34 @@ class OutpostDefenseGame:
             pygame.draw.rect(self.screen, (0, 0, 0), timer_bg, 2, border_radius=8) 
             
             self.screen.blit(timer_surf, timer_rect)
+        
+    def play_sound(self, sound):
+        if self.sfx_enabled and sound is not None:
+            sound.play()
+    
+    # фоновая музыка
+    def toggle_music(self):
+        self.music_enabled = not self.music_enabled
+        if self.music_enabled:
+            pygame.mixer.music.unpause()
+        else:
+            pygame.mixer.music.pause()
+            
+        status = "ВКЛ" if self.music_enabled else "ВЫКЛ"
+        self.btn_music.text = f"МУЗЫКА: {status}"
+        self.menu_btn_music.text = f"МУЗЫКА: {status}"
+
+    # звуковые эффекты
+    def toggle_sfx(self):
+        self.sfx_enabled = not self.sfx_enabled
+        
+        status = "ВКЛ" if self.sfx_enabled else "ВЫКЛ"
+        self.btn_sfx.text = f"ЗВУКИ: {status}"
+        self.menu_btn_sfx.text = f"ЗВУКИ: {status}"
+
+    def show_notify(self, text):
+        self.notify_text = text
+        self.notify_timer = self.notify_time_len
 
     def run(self):
         while self.running:
