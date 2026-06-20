@@ -1,9 +1,11 @@
 import pygame
 import math
 import settings
+import random
 
 
 class Bullet(pygame.sprite.Sprite):
+    """"Класс Пуль"""
     def __init__(self, start_pos, target_pos, damage, *groups):
         super().__init__(*groups)
         self.image = pygame.Surface((6, 6), pygame.SRCALPHA)
@@ -31,17 +33,36 @@ class Bullet(pygame.sprite.Sprite):
 
 
 class AlienBug(pygame.sprite.Sprite):
+    """Родительский класс жука"""
     def __init__(self, waypoints, hp, speed, *groups):
         super().__init__(*groups)
         orig_image = pygame.image.load("assets/bug.png").convert_alpha()
-        self.image = pygame.transform.scale(orig_image, (50, 50))
+        self.image_def = pygame.transform.scale(orig_image, (50, 50))
+        
+        image_rt = pygame.image.load("assets/bug_rt.png").convert_alpha()
+        self.image_rt = pygame.transform.scale(image_rt, (50, 50))
+
+        image_up = pygame.image.load("assets/bug_up.png").convert_alpha()
+        self.image_up = pygame.transform.scale(image_up, (50, 50))
+        
+        self.image = self.image_def
         self.rect = self.image.get_rect()
 
         self.waypoints = waypoints
         self.current_wp_index = 0
 
-        # Начальная позиция - первый вейпоинт
-        self.pos = pygame.math.Vector2(self.waypoints[self.current_wp_index])
+        offset_x = random.randint(-12, 12)
+        offset_y = random.randint(-12, 12)
+
+        # генерация случайных смещений для каждого жука
+        self.my_waypoints = []
+        for wp in waypoints:
+            self.my_waypoints.append(pygame.math.Vector2(wp[0] + offset_x, wp[1] + offset_y))
+
+        self.current_wp_index = 0
+        
+        # cпавн жука на его рандомной первой точке
+        self.pos = pygame.math.Vector2(self.my_waypoints[0]) 
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
         self.speed = speed  # пикселей в секунду
@@ -60,16 +81,31 @@ class AlienBug(pygame.sprite.Sprite):
         return False
 
     def update(self, dt):
-        # Если достигли конца маршрута (аванпоста)
-        if self.current_wp_index >= len(self.waypoints):
+        # если достигли конца маршрута (аванпоста)
+        if self.current_wp_index >= len(self.my_waypoints):
             self.reached_base = True
             return
 
-        # Берем текущую цель
-        target = pygame.math.Vector2(self.waypoints[self.current_wp_index])
+        # берем текущую цель
+        target = self.my_waypoints[self.current_wp_index]
         direction = target - self.pos
         distance = direction.length()
 
+        if distance > 0: 
+            if abs(direction.x) > abs(direction.y): # смена модели жуков в зависимости от направления
+                if direction.x > 0:
+                    self.image = self.image_rt
+                else:
+                    self.image = self.image_def
+            else:
+                if direction.y > 0:
+                    self.image = self.image_def
+                else:
+                    self.image = self.image_up
+            
+            old_center = self.rect.center
+            self.rect = self.image.get_rect(center=old_center)
+                                            
         # Шаг движения за этот кадр
         move_step = self.speed * dt
 
@@ -86,11 +122,22 @@ class AlienBug(pygame.sprite.Sprite):
 
 
 class TankBug(AlienBug):
+    """Класс жука Танк, наследованный от класса AlienBug"""
     def __init__(self, waypoints, hp, speed, *groups):
         super().__init__(waypoints, hp, speed, *groups)
 
         orig_image = pygame.image.load("assets/TankBug.png").convert_alpha()
-        self.image = pygame.transform.scale(orig_image, (75, 75))
+        self.image_def = pygame.transform.scale(orig_image, (75, 75))
+
+        image_up = pygame.image.load("assets/TankBug_up.png").convert_alpha()
+        self.image_up = pygame.transform.scale(image_up, (75, 75))
+
+        image_rt = pygame.image.load("assets/TankBug_rt.png").convert_alpha()
+        self.image_rt = pygame.transform.scale(image_rt, (75, 75))
+
+        image_lt = pygame.image.load("assets/TankBug_lt.png").convert_alpha()
+        self.image_lt = pygame.transform.scale(image_lt, (75, 75))
+
         self.rect = self.image.get_rect()
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
@@ -103,6 +150,7 @@ class TankBug(AlienBug):
     
 
 class Turret(pygame.sprite.Sprite):
+    """"Класс турели"""
     def __init__(self, pos, *groups):
         super().__init__(*groups)
 
@@ -154,3 +202,32 @@ class Turret(pygame.sprite.Sprite):
                 self.image = self.image_back
             else:
                 self.image = self.image_front
+
+
+class FloatingText(pygame.sprite.Sprite):
+    """Класс всплывающих чисел"""
+    def __init__(self, pos, text, font, color, *groups):
+        super().__init__(*groups)
+        
+        self.text_surf = font.render(text, True, color)
+        self.image = self.text_surf.copy()
+        
+        self.rect = self.image.get_rect(center=pos)
+        self.pos = pygame.math.Vector2(pos)
+        self.velocity = pygame.math.Vector2(0, -40) 
+        
+        self.timer = 0.0
+        self.lifetime = 1.0 
+
+    def update(self, dt):
+        # двигаем текст вверх
+        self.pos += self.velocity * dt
+        self.rect.center = (round(self.pos.x), round(self.pos.y))
+        self.timer += dt
+        
+        # исчезновение
+        if self.timer < self.lifetime:
+            alpha = int(255 * (1.0 - (self.timer / self.lifetime)))
+            self.image.set_alpha(alpha)
+        else:
+            self.kill()

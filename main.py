@@ -2,7 +2,7 @@ import pygame
 import sys
 import settings
 import random
-from sprites import Bullet, AlienBug, TankBug, Turret
+from sprites import Bullet, AlienBug, TankBug, Turret, FloatingText
 from ui import Button, ImageButton
 
 
@@ -40,13 +40,13 @@ class OutpostDefenseGame:
 
         pygame.mixer.music.load("assets/sounds/post_apocalyptic.mp3")
         pygame.mixer.music.play(-1)
-        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.set_volume(0.3)
 
         self.sound_shoot = pygame.mixer.Sound("assets/sounds/laserLarge_002_(shoot).ogg")
         self.sound_hit = pygame.mixer.Sound("assets/sounds/Heavy Magical Explosion_SI 03_base_damage.wav")
         #self.sound_gameover = pygame.mixer.Sound("путь звука конца игры")
 
-        self.sound_shoot.set_volume(0.15)
+        self.sound_shoot.set_volume(0.1)
         self.sound_hit.set_volume(0.2)
         #self.sound_gameover.set_volume(0.5)
 
@@ -59,10 +59,18 @@ class OutpostDefenseGame:
 
         orig_road_vert = pygame.image.load("assets/road_vert.png").convert_alpha()
         orig_road_gor = pygame.image.load("assets/road_gor.png").convert_alpha()
+        orig_road_ltup = pygame.image.load("assets/road_ugol_ltup.png").convert_alpha()
+        orig_road_ltdw = pygame.image.load("assets/road_ugol_ltdw.png").convert_alpha()
+        orig_road_rtup = pygame.image.load("assets/road_ugol_rtup.png").convert_alpha()
+        orig_road_rtdw = pygame.image.load("assets/road_ugol_rtdw.png").convert_alpha()
 
-        t_size = (settings.TILE_SIZE, settings.TILE_SIZE)
-        self.road_vert = pygame.transform.scale(orig_road_vert, t_size)
-        self.road_gor = pygame.transform.scale(orig_road_gor, t_size)
+        r_size = (settings.ROAD_SIZE, settings.ROAD_SIZE)
+        self.road_vert = pygame.transform.scale(orig_road_vert, r_size)
+        self.road_gor = pygame.transform.scale(orig_road_gor, r_size)
+        self.road_ltup = pygame.transform.scale(orig_road_ltup, r_size)
+        self.road_ltdw = pygame.transform.scale(orig_road_ltdw, r_size)
+        self.road_rtup = pygame.transform.scale(orig_road_rtup, r_size)
+        self.road_rtdw = pygame.transform.scale(orig_road_rtdw, r_size)
         
         self.road_draw = []
         
@@ -97,6 +105,7 @@ class OutpostDefenseGame:
 
         self.state = "MENU"
 
+        # ui элементы (кнопки, лого и т.д)
         self.ui_font = pygame.font.SysFont("Arial", 22, bold=True)
         self.menu_font = pygame.font.SysFont("Arial", 36, bold=True)
         self.title_font = pygame.font.SysFont("Arial", 64, bold=True)
@@ -213,6 +222,7 @@ class OutpostDefenseGame:
         self.turrets_group = pygame.sprite.Group()
         self.bugs_group = pygame.sprite.Group()
         self.bullets_group = pygame.sprite.Group()
+        self.floating_texts = pygame.sprite.Group()
 
         self.credits = 50
         self.base_hp = 100
@@ -371,6 +381,7 @@ class OutpostDefenseGame:
         # обновление жуков и пуль
         self.bugs_group.update(dt)
         self.bullets_group.update(dt)
+        self.floating_texts.update(dt)
 
         # обновление турелей
         for turret in self.turrets_group:
@@ -398,6 +409,14 @@ class OutpostDefenseGame:
                 if bug.take_damage(bullet.damage):
                     self.credits += bug.reward
                     self.score += bug.score_value
+                    FloatingText(
+                        bug.rect.center,
+                        f"+{bug.reward}$",
+                        self.hp_font, 
+                        (50, 255, 50),
+                        self.all_sprites,
+                        self.floating_texts
+                    )
                     self.bugs_finished += 1
                 
         if self.base_hp <= 0:
@@ -549,7 +568,7 @@ class OutpostDefenseGame:
     def _draw_road_graphics(self):
         self.road_draw = []
         full_road = []
-        
+
         for i in range(len(self.current_road) - 1):
             p1 = pygame.math.Vector2(self.current_road[i])
             p2 = pygame.math.Vector2(self.current_road[i+1])
@@ -565,23 +584,45 @@ class OutpostDefenseGame:
                 coord = (round(point.x), round(point.y))
                 if not full_road or full_road[-1] != coord:
                     full_road.append(coord)
-        
+
         last_coord = (round(self.current_road[-1][0]), round(self.current_road[-1][1]))
         if not full_road or full_road[-1] != last_coord:
             full_road.append(last_coord)
-        
+
         for i in range(len(full_road)):
             current = full_road[i]
 
-            if i == len(full_road) - 1:
-                pred_t = full_road[i-1]
-                img = self.road_vert if current[0] == pred_t[0] else self.road_gor 
-            else:
+            if i == 0:
                 next_t = full_road[i+1]
                 img = self.road_vert if current[0] == next_t[0] else self.road_gor
+            elif i == len(full_road) - 1:
+                pred_t = full_road[i-1]
+                img = self.road_vert if current[0] == pred_t[0] else self.road_gor
+            else:
+                next_t = full_road[i+1]
+                pred_t = full_road[i-1]
+                if next_t[0] == pred_t[0]:
+                    img = self.road_vert
+                elif next_t[1] == pred_t[1]:
+                    img = self.road_gor
+                else:
+                    is_left = (pred_t[0] < current[0]) or (next_t[0] < current[0])
+                    is_right = (pred_t[0] > current[0]) or (next_t[0] > current[0])
+                    is_up = (pred_t[1] < current[1]) or (next_t[1] < current[1])
+                    is_down = (pred_t[1] > current[1]) or (next_t[1] > current[1])
+
+                    if is_left and is_up:
+                        img = self.road_ltup
+                    elif is_right and is_up:
+                        img = self.road_rtup
+                    elif is_left and is_down:
+                        img = self.road_ltdw
+                    elif is_right and is_down:
+                        img = self.road_rtdw
 
             rect = img.get_rect(center=current)
-            self.road_draw.append((img, rect))
+            self.road_draw.append((img, rect)) 
+
 
     def _draw_hp_bars(self):
         if self.base_hp > 0:
@@ -638,7 +679,7 @@ class OutpostDefenseGame:
     def draw_ui(self):
         pygame.draw.rect(self.screen, settings.COLOR_UI_BAR, (0, 0, settings.WIDTH, 40))
         hp_text = f"АВАНПОСТ: {self.base_hp}"
-        credits_text = f"КРЕДИТЫ: ${self.credits}"
+        credits_text = f"КРЕДИТЫ: {self.credits}$"
         cost_text = f"ТУРРЕЛЬ: ${self.turret_cost}"
         wave_text = f"ВОЛНА: {self.current_wave_index + 1}/{len(self.waves)}"
         score_text = self.ui_font.render(f"СЧЕТ: {self.score}", True, (255, 255, 255))

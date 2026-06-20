@@ -1,6 +1,7 @@
 # настойки базы
 WIDTH, HEIGHT = 900, 600
 TILE_SIZE = 40
+ROAD_SIZE = 50
 
 COLOR_KLENDATHU_ROCK = (80, 60, 50)  # Грунт
 COLOR_CANYON = (40, 30, 25)  # Глубокий каньон (Дорога для жуков)
