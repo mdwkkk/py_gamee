@@ -19,7 +19,7 @@ class OutpostDefenseGame:
             {
                 "normal_count": 5, "normal_hp": 100, "normal_speed": 100,
              "tank_count": 0, "tank_hp": 0, "tank_speed": 0,
-              "interval": 1.2, "road": settings.WAYPOINTS_1
+              "interval": 1.2, "road": settings.WAYPOINTS_3
               },
             {
                 "normal_count": 10, "normal_hp": 80, "normal_speed": 130,
@@ -40,7 +40,7 @@ class OutpostDefenseGame:
 
         pygame.mixer.music.load("assets/sounds/post_apocalyptic.mp3")
         pygame.mixer.music.play(-1)
-        pygame.mixer.music.set_volume(0.3)
+        pygame.mixer.music.set_volume(0.1)
 
         self.sound_shoot = pygame.mixer.Sound("assets/sounds/laserLarge_002_(shoot).ogg")
         self.sound_hit = pygame.mixer.Sound("assets/sounds/Heavy Magical Explosion_SI 03_base_damage.wav")
@@ -53,8 +53,16 @@ class OutpostDefenseGame:
         orig_bg_img = pygame.image.load("assets/game_bg.png").convert()
         self.background = pygame.transform.scale(orig_bg_img, (settings.WIDTH, settings.HEIGHT))
 
-        orig_outpost_img = pygame.image.load("assets/outpost1.png").convert_alpha()
-        self.outpost_img = pygame.transform.scale(orig_outpost_img, (200, 200))
+        orig_outpost_100hp_img = pygame.image.load("assets/outpost1.png").convert_alpha()
+        self.outpost_100hp_img = pygame.transform.scale(orig_outpost_100hp_img, (200, 200))
+
+        outpost_50hp = pygame.image.load("assets/outpost_50hp.png").convert_alpha()
+        self.outpost_50hp_img = pygame.transform.scale(outpost_50hp, (200, 200))
+        
+        outpost_0hp = pygame.image.load("assets/outpost_0hp.png").convert_alpha()
+        self.outpost_0hp_img = pygame.transform.scale(outpost_0hp, (200, 200))
+        
+        self.outpost_img = self.outpost_100hp_img
         self.outpost_rect = self.outpost_img.get_rect(center=self.current_road[-1])
 
         orig_road_vert = pygame.image.load("assets/road_vert.png").convert_alpha()
@@ -111,7 +119,10 @@ class OutpostDefenseGame:
         self.title_font = pygame.font.SysFont("Arial", 64, bold=True)
         self.hp_font = pygame.font.SysFont("Arial", 12, bold=True)
         center_x = settings.WIDTH // 2
-        btn_w, btn_h = 250, 60
+
+        orig_panel = pygame.image.load("assets/panel_1.png").convert_alpha()
+        self.panel_h = 100
+        self.panel_img = pygame.transform.scale(orig_panel, (settings.WIDTH, self.panel_h))
 
         orig_menu_bg = pygame.image.load("assets/menu_bg.png").convert()
         self.menu_bg_img = pygame.transform.scale(orig_menu_bg, (settings.WIDTH, settings.HEIGHT))
@@ -158,6 +169,16 @@ class OutpostDefenseGame:
         self.orig_music_on_hover_img = pygame.transform.scale(orig_music_on_hover, (100, 100))
         self.orig_music_off_hover_img = pygame.transform.scale(orig_music_off_hover, (100, 100))
 
+        orig_sfx_on = pygame.image.load("assets/sound_on.png").convert_alpha()
+        orig_sfx_off = pygame.image.load("assets/sound_off.png").convert_alpha()
+        self.sfx_on_img = pygame.transform.scale(orig_sfx_on, (117, 117))
+        self.sfx_off_img = pygame.transform.scale(orig_sfx_off, (117, 117))
+
+        orig_sfx_on_hover = pygame.image.load("assets/sound_on_hover.png").convert_alpha()
+        orig_sfx_off_hover = pygame.image.load("assets/sound_off_hover.png").convert_alpha()
+        self.sfx_on_hover_img = pygame.transform.scale(orig_sfx_on_hover, (117, 117))
+        self.sfx_off_hover_img = pygame.transform.scale(orig_sfx_off_hover, (117, 117))
+
         self.btn_start = ImageButton(
             x=center_x,
             y=300, 
@@ -194,25 +215,33 @@ class OutpostDefenseGame:
             x=75, 
             y=settings.HEIGHT - 70, 
             image=self.orig_music_on_img, 
-            hover_image=self.orig_music_on_hover_img, 
+            hover_image=self.orig_music_on_img, 
             action=self.toggle_music
         )
 
         self.btn_music = ImageButton(
-            x=center_x - 50, 
-            y=450, 
+            x=center_x - 55, 
+            y=515, 
             image=self.orig_music_on_img, 
-            hover_image=self.orig_music_on_hover_img, 
+            hover_image=self.orig_music_on_img, 
             action=self.toggle_music
         )
-
-        sm_w, sm_h = 180, 45
         
-        self.menu_btn_sfx = Button(settings.WIDTH - 200, settings.HEIGHT - 65, sm_w, sm_h, "ЗВУКИ: ВКЛ", self.hp_font, self.toggle_sfx)
+        self.menu_btn_sfx = ImageButton(
+            x = 190,
+            y=settings.HEIGHT - 70,
+            image=self.sfx_on_img,
+            hover_image=self.sfx_on_img,
+            action=self.toggle_sfx
+        )
 
-        left_x = center_x - btn_w // 2
-        
-        self.btn_sfx = Button(left_x, 520, btn_w, btn_h, "ЗВУКИ: ВКЛ", self.menu_font, self.toggle_sfx)
+        self.btn_sfx = ImageButton(
+            x=center_x + 65, 
+            y=515, 
+            image=self.sfx_on_img,
+            hover_image=self.sfx_on_img,
+            action=self.toggle_sfx
+        )
         
         self.reset_game()
     
@@ -224,17 +253,19 @@ class OutpostDefenseGame:
         self.bullets_group = pygame.sprite.Group()
         self.floating_texts = pygame.sprite.Group()
 
+        self.outpost_img = self.outpost_100hp_img
+
         self.credits = 50
         self.base_hp = 100
         self.max_base_hp = 100
-        self.score = 0
+        self.score = 1000
         
         self.current_wave_index = 0
         self.waves = [
             {
                 "normal_count": 5, "normal_hp": 100, "normal_speed": 100,
              "tank_count": 0, "tank_hp": 0, "tank_speed": 0,
-              "interval": 1.2, "road": settings.WAYPOINTS_1
+              "interval": 1.2, "road": settings.WAYPOINTS_3
               },
             {
                 "normal_count": 10, "normal_hp": 80, "normal_speed": 130,
@@ -391,6 +422,10 @@ class OutpostDefenseGame:
         for bug in list(self.bugs_group):
             if bug.reached_base:
                 self.base_hp -= 10
+                if 0 < self.base_hp <= 50:
+                    self.outpost_img = self.outpost_50hp_img
+                elif self.base_hp == 0:
+                    self.outpost_img = self.outpost_0hp_img
                 self.bugs_finished += 1
                 self.play_sound(self.sound_hit)
                 bug.kill()
@@ -493,7 +528,7 @@ class OutpostDefenseGame:
     def _is_valid_position(self, center_pos, ignore_turret=None):
         grid_x = center_pos[0] - settings.TILE_SIZE // 2
         grid_y = center_pos[1] - settings.TILE_SIZE // 2
-        if not (0 <= grid_x < settings.WIDTH and 40 <= grid_y < settings.HEIGHT):
+        if not (0 <= grid_x < settings.WIDTH and 110 <= grid_y < settings.HEIGHT):
             return False
 
         temp_rect = pygame.Rect(grid_x, grid_y, settings.TILE_SIZE, settings.TILE_SIZE)
@@ -677,34 +712,43 @@ class OutpostDefenseGame:
         self.screen.blit(self.outpost_img, self.outpost_rect)
 
     def draw_ui(self):
-        pygame.draw.rect(self.screen, settings.COLOR_UI_BAR, (0, 0, settings.WIDTH, 40))
-        hp_text = f"АВАНПОСТ: {self.base_hp}"
-        credits_text = f"КРЕДИТЫ: {self.credits}$"
-        cost_text = f"ТУРРЕЛЬ: ${self.turret_cost}"
-        wave_text = f"ВОЛНА: {self.current_wave_index + 1}/{len(self.waves)}"
-        score_text = self.ui_font.render(f"СЧЕТ: {self.score}", True, (255, 255, 255))
+        self.screen.blit(self.panel_img, (0, 0))
 
-        hp_surface = self.ui_font.render(
-            hp_text, True, (255, 50, 50) if self.base_hp <= 30 else settings.COLOR_TEXT
-        )
-        credits_surface = self.ui_font.render(credits_text, True, (0, 128, 0))
-        cost_surface = self.ui_font.render(cost_text, True, (150, 150, 150))
-        wave_surface = self.ui_font.render(wave_text, True, (255, 200, 0))
+        bar_x = 83
+        bar_y = 43
+        bar_w = 145
+        bar_h = 26 
+        
+        fill = (self.base_hp / self.max_base_hp) * bar_w
+        fill_rect = pygame.Rect(bar_x, bar_y, fill, bar_h)
 
-        self.screen.blit(hp_surface, (20, 8))
-        self.screen.blit(credits_surface, (220, 8))
-        self.screen.blit(score_text, (430, 8))
-        self.screen.blit(cost_surface, (570, 8))
-        self.screen.blit(wave_surface, (760, 8))
+        hp_color = (0, 200, 0) if self.base_hp > 30 else (200, 0, 0)
+        pygame.draw.rect(self.screen, hp_color, fill_rect)
+
+        hp_text = self.ui_font.render(f"{int(self.base_hp)} / {int(self.max_base_hp)}", True, (255, 255, 255))
+        hp_rect = hp_text.get_rect(center=(bar_x + bar_w // 2, bar_y + bar_h // 2))
+        self.screen.blit(hp_text, hp_rect)
+
+        color_val = (240, 200, 100)
+
+        cred_text = self.ui_font.render(f"{self.credits}", True, color_val)
+        self.screen.blit(cred_text, (335, 45)) 
+
+        score_text = self.ui_font.render(f"{self.score}", True, color_val)
+        self.screen.blit(score_text, (485, 45))
+
+        cost_text = self.ui_font.render(f"{self.turret_cost}", True, color_val)
+        self.screen.blit(cost_text, (650, 45))
+
+        wave_text = self.ui_font.render(f"{self.current_wave_index + 1}/{len(self.waves)}", True, color_val)
+        self.screen.blit(wave_text, (805, 45))
 
         if self.notify_text:
             notif_surf = self.ui_font.render(self.notify_text, True, (255, 100, 100))
-            
-            notif_rect = notif_surf.get_rect(center=(settings.WIDTH // 2, 60))
+            notif_rect = notif_surf.get_rect(center=(settings.WIDTH // 2, 110))
             
             bg_rect = notif_rect.inflate(20, 10)
             pygame.draw.rect(self.screen, (0, 0, 0, 150), bg_rect, border_radius=5)
-            
             self.screen.blit(notif_surf, notif_rect)
         
         if not self.is_wave_active:
@@ -712,13 +756,13 @@ class OutpostDefenseGame:
                 timer_text = f"НАЧАЛО ЧЕРЕЗ: {max(0, self.wave_timer):.0f} СЕК"
             else:
                 timer_text = f"СЛЕДУЮЩАЯ ВОЛНА ЧЕРЕЗ: {max(0, self.wave_timer):.0f} СЕК"
+                
             timer_surf = self.ui_font.render(timer_text, True, (0, 0, 0)) 
-            timer_rect = timer_surf.get_rect(center=(settings.WIDTH // 2, 120))
+            timer_rect = timer_surf.get_rect(center=(settings.WIDTH // 2, 150))
             timer_bg = timer_rect.inflate(30, 15)
             
             pygame.draw.rect(self.screen, (240, 220, 140, 180), timer_bg, border_radius=8)
             pygame.draw.rect(self.screen, (0, 0, 0), timer_bg, 2, border_radius=8) 
-            
             self.screen.blit(timer_surf, timer_rect)
         
     def play_sound(self, sound):
@@ -744,9 +788,15 @@ class OutpostDefenseGame:
     def toggle_sfx(self):
         self.sfx_enabled = not self.sfx_enabled
         
-        status = "ВКЛ" if self.sfx_enabled else "ВЫКЛ"
-        self.btn_sfx.text = f"ЗВУКИ: {status}"
-        self.menu_btn_sfx.text = f"ЗВУКИ: {status}"
+        if self.sfx_enabled:
+            new_img = self.sfx_on_img
+        else:
+            new_img = self.sfx_off_img
+            
+        self.btn_sfx.image = new_img
+        self.btn_sfx.hover_image = new_img
+        self.menu_btn_sfx.image = new_img
+        self.menu_btn_sfx.hover_image = new_img
 
     def show_notify(self, text):
         self.notify_text = text
