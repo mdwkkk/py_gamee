@@ -1,5 +1,4 @@
 import pygame
-import math
 import settings
 import random
 
@@ -68,6 +67,7 @@ class AlienBug(pygame.sprite.Sprite):
         self.speed = speed  # пикселей в секунду
         self.hp = hp
         self.max_hp = hp
+        self.damage_to_base = 10
         self.reached_base = False  # флаг прорыва к аванпосту
 
         self.reward = 10 # кредитов за убийство
@@ -141,6 +141,7 @@ class TankBug(AlienBug):
         self.rect = self.image.get_rect()
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
+        self.damage_to_base = 20
         self.reward = 30
         self.score_value = 200
 
@@ -148,7 +149,38 @@ class TankBug(AlienBug):
         damage = max(1, amount - 10)
         return super().take_damage(damage)
     
+class Outpost(pygame.sprite.Sprite):
+    def __init__(self, pos, *groups):
+        super().__init__(*groups)
+    
+        orig_outpost_100hp_img = pygame.image.load("assets/outpost1.png").convert_alpha()
+        self.outpost_100hp_img = pygame.transform.scale(orig_outpost_100hp_img, (200, 200))
 
+        outpost_50hp = pygame.image.load("assets/outpost_50hp.png").convert_alpha()
+        self.outpost_50hp_img = pygame.transform.scale(outpost_50hp, (200, 200))
+        
+        outpost_0hp = pygame.image.load("assets/outpost_0hp.png").convert_alpha()
+        self.outpost_0hp_img = pygame.transform.scale(outpost_0hp, (200, 200))
+        
+        self.image = self.outpost_100hp_img
+        self.rect = self.image.get_rect(center=pos)
+        
+        self.max_hp = 100
+        self.hp = self.max_hp
+        
+    def take_damage(self, amount):
+        self.hp -= amount
+        if self.hp < 0:
+            self.hp = 0
+            
+        if 0 < self.hp <= 50:
+            self.image = self.outpost_50hp_img
+        elif self.hp == 0:
+            self.image = self.outpost_0hp_img
+            
+    def reset_pos(self, new_pos):
+        self.rect.center = new_pos
+    
 class Turret(pygame.sprite.Sprite):
     """"Класс турели"""
     def __init__(self, pos, *groups):
@@ -196,7 +228,7 @@ class Turret(pygame.sprite.Sprite):
             play_sound(shoot_sound)
             self.shoot_timer = 0.0
 
-        # меняем картинку турели в зависимости от позиции врага
+        # меняем картинку турели в зависимости от позиции врага (если цель выше по Y, то меняем модельку)
         if self.target:
             if self.target.rect.centery < self.rect.centery:
                 self.image = self.image_back

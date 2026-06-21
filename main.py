@@ -2,8 +2,8 @@ import pygame
 import sys
 import settings
 import random
-from sprites import Bullet, AlienBug, TankBug, Turret, FloatingText
-from ui import Button, ImageButton
+from sprites import AlienBug, TankBug, Turret, Outpost, FloatingText
+from ui import ImageButton
 
 
 class OutpostDefenseGame:
@@ -53,18 +53,6 @@ class OutpostDefenseGame:
         orig_bg_img = pygame.image.load("assets/game_bg.png").convert()
         self.background = pygame.transform.scale(orig_bg_img, (settings.WIDTH, settings.HEIGHT))
 
-        orig_outpost_100hp_img = pygame.image.load("assets/outpost1.png").convert_alpha()
-        self.outpost_100hp_img = pygame.transform.scale(orig_outpost_100hp_img, (200, 200))
-
-        outpost_50hp = pygame.image.load("assets/outpost_50hp.png").convert_alpha()
-        self.outpost_50hp_img = pygame.transform.scale(outpost_50hp, (200, 200))
-        
-        outpost_0hp = pygame.image.load("assets/outpost_0hp.png").convert_alpha()
-        self.outpost_0hp_img = pygame.transform.scale(outpost_0hp, (200, 200))
-        
-        self.outpost_img = self.outpost_100hp_img
-        self.outpost_rect = self.outpost_img.get_rect(center=self.current_road[-1])
-
         orig_road_vert = pygame.image.load("assets/road_vert.png").convert_alpha()
         orig_road_gor = pygame.image.load("assets/road_gor.png").convert_alpha()
         orig_road_ltup = pygame.image.load("assets/road_ugol_ltup.png").convert_alpha()
@@ -108,7 +96,6 @@ class OutpostDefenseGame:
 
         self.credits = 50  # стартовые кредиты
         self.turret_cost = 50  # стоимость одной турели
-        self.base_hp = 100  # хп аванпоста
         self.score = 0  # число уничтоженных жуков 
 
         self.state = "MENU"
@@ -253,11 +240,9 @@ class OutpostDefenseGame:
         self.bullets_group = pygame.sprite.Group()
         self.floating_texts = pygame.sprite.Group()
 
-        self.outpost_img = self.outpost_100hp_img
+        self.outpost = Outpost(self.current_road[-1], self.all_sprites)
 
         self.credits = 50
-        self.base_hp = 100
-        self.max_base_hp = 100
         self.score = 1000
         
         self.current_wave_index = 0
@@ -280,8 +265,6 @@ class OutpostDefenseGame:
         ]
         self.current_wave_data = self.waves[self.current_wave_index]
         self.current_road = self.current_wave_data["road"]
-        self.outpost_rect = self.outpost_img.get_rect(center=self.current_road[-1])
-        self.outpost_rect.center = self.current_road[-1]
         self._draw_road_graphics()
         
         self.wave_timer = 5.0
@@ -334,7 +317,7 @@ class OutpostDefenseGame:
             elif self.state == "PLAYING":
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if event.pos[1] < 40:
+                        if event.pos[1] < 100:
                             continue
 
                         if self.credits >= self.turret_cost:
@@ -421,16 +404,13 @@ class OutpostDefenseGame:
         # проверка нанес ли жук урон по базе
         for bug in list(self.bugs_group):
             if bug.reached_base:
-                self.base_hp -= 10
-                if 0 < self.base_hp <= 50:
-                    self.outpost_img = self.outpost_50hp_img
-                elif self.base_hp == 0:
-                    self.outpost_img = self.outpost_0hp_img
+                self.outpost.take_damage(bug.damage_to_base)
                 self.bugs_finished += 1
                 self.play_sound(self.sound_hit)
                 bug.kill()
-                if self.base_hp < 0:
-                    self.base_hp = 0
+
+        if self.outpost.hp <= 0:
+            self.state = "GAME_OVER"
 
         # обработка попаданий
         # False означает "не удалять жука автоматически"
@@ -454,9 +434,6 @@ class OutpostDefenseGame:
                     )
                     self.bugs_finished += 1
                 
-        if self.base_hp <= 0:
-            self.state = "GAME_OVER"
-
     def start_next_wave(self):
         self.is_wave_active = True
         self.bugs_spawned = 0
@@ -464,7 +441,7 @@ class OutpostDefenseGame:
         
         self.current_road = self.waves[self.current_wave_index]["road"]
         self.current_wave_data = self.waves[self.current_wave_index]
-        self.outpost_rect.center = self.current_road[-1]
+        self.outpost.reset_pos(self.current_road[-1])
         self._draw_road_graphics()
 
         self.spawn_ochered = []
@@ -660,13 +637,13 @@ class OutpostDefenseGame:
 
 
     def _draw_hp_bars(self):
-        if self.base_hp > 0:
+        if self.outpost.hp > 0:
             bar_w, bar_h = 80, 8
-            fill = (self.base_hp / self.max_base_hp) * bar_w
+            fill = (self.outpost.hp / self.outpost.max_hp) * bar_w
             
             outline_rect = pygame.Rect(0, 0, bar_w, bar_h)
-            outline_rect.centerx = self.outpost_rect.centerx
-            outline_rect.bottom = self.outpost_rect.top - 10
+            outline_rect.centerx = self.outpost.rect.centerx
+            outline_rect.bottom = self.outpost.rect.top - 10
 
             fill_rect = pygame.Rect(outline_rect.x, outline_rect.y, fill, bar_h)
 
@@ -674,7 +651,7 @@ class OutpostDefenseGame:
             pygame.draw.rect(self.screen, (0, 200, 0), fill_rect)
             pygame.draw.rect(self.screen, (0, 0, 0), outline_rect, 1)
 
-            hp_text = self.hp_font.render(str(int(self.base_hp)), True, settings.COLOR_TEXT)
+            hp_text = self.hp_font.render(str(int(self.outpost.hp)), True, settings.COLOR_TEXT)
             hp_rect = hp_text.get_rect(midleft=(outline_rect.left - 25, outline_rect.centery))
             self.screen.blit(hp_text, hp_rect)
         
@@ -709,7 +686,6 @@ class OutpostDefenseGame:
         for img, rect in self.road_draw:
             self.screen.blit(img, rect)
 
-        self.screen.blit(self.outpost_img, self.outpost_rect)
 
     def draw_ui(self):
         self.screen.blit(self.panel_img, (0, 0))
@@ -719,13 +695,13 @@ class OutpostDefenseGame:
         bar_w = 145
         bar_h = 26 
         
-        fill = (self.base_hp / self.max_base_hp) * bar_w
+        fill = (self.outpost.hp / self.outpost.max_hp) * bar_w
         fill_rect = pygame.Rect(bar_x, bar_y, fill, bar_h)
 
-        hp_color = (0, 200, 0) if self.base_hp > 30 else (200, 0, 0)
+        hp_color = (0, 200, 0) if self.outpost.hp > 30 else (200, 0, 0)
         pygame.draw.rect(self.screen, hp_color, fill_rect)
 
-        hp_text = self.ui_font.render(f"{int(self.base_hp)} / {int(self.max_base_hp)}", True, (255, 255, 255))
+        hp_text = self.ui_font.render(f"{int(self.outpost.hp)} / {int(self.outpost.max_hp)}", True, (255, 255, 255))
         hp_rect = hp_text.get_rect(center=(bar_x + bar_w // 2, bar_y + bar_h // 2))
         self.screen.blit(hp_text, hp_rect)
 
