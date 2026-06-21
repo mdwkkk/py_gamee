@@ -292,6 +292,10 @@ class OutpostDefenseGame:
             self.state = "PLAYING"
 
     def handle_events(self):
+        """
+        Обрабатывает ввод мыши и клавиатуры
+        Делегирует события элементам UI или вызывает действия в игре зависимости от состояния
+        """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -343,6 +347,10 @@ class OutpostDefenseGame:
                                 break
 
     def update(self, dt):
+        """
+        Обновляет таймеры волн, управляет спавном врагов, просчитывает физику (движение, коллизии),
+        обрабатывает получение урона базой и врагами
+        """
         if self.state != "PLAYING":
             return
         
@@ -435,6 +443,10 @@ class OutpostDefenseGame:
                     self.bugs_finished += 1
                 
     def start_next_wave(self):
+        """
+        Инициализация следующей волны, обновляет маршрут, рассчитывает количество врагов,
+        перемешивает очередь спавна и запускает проверку смещения турелей
+        """
         self.is_wave_active = True
         self.bugs_spawned = 0
         self.bugs_finished = 0
@@ -503,6 +515,11 @@ class OutpostDefenseGame:
             self.state = "VICTORY"
 
     def _is_valid_position(self, center_pos, ignore_turret=None):
+        """
+        Проверяет, свободна ли координата для постройки
+        Оценивает границы экрана, зону UI-панели, пересечения с дорогой, базой и другими турелями
+        Возвращает True, если позиция валидна
+        """
         grid_x = center_pos[0] - settings.TILE_SIZE // 2
         grid_y = center_pos[1] - settings.TILE_SIZE // 2
         if not (0 <= grid_x < settings.WIDTH and 110 <= grid_y < settings.HEIGHT):
@@ -525,6 +542,7 @@ class OutpostDefenseGame:
         return True
 
     def draw(self):
+        """Отрисовывает фон, все игровые объекты и ui на экране"""
         if self.state in ["PLAYING", "PAUSED", "GAME_OVER", "VICTORY"]:
             self.draw_grid_and_road()
             self.all_sprites.draw(self.screen)
@@ -576,8 +594,8 @@ class OutpostDefenseGame:
 
         pygame.display.flip()
 
-    # рисовка графики дороги
     def _draw_road_graphics(self):
+        """Генерирует графику дороги"""
         self.road_draw = []
         full_road = []
 

@@ -23,6 +23,10 @@ class Bullet(pygame.sprite.Sprite):
             self.direction = pygame.math.Vector2(1, 0)
 
     def update(self, dt):
+        """
+        Перемещает пулю по прямой линии на основе нормализованного вектора направления
+        Удаляет объект из памяти, если пуля выходит за границы экрана
+        """
         self.pos += self.direction * self.speed * dt
         self.rect.center = (round(self.pos.x), round(self.pos.y))
         if not (
@@ -74,6 +78,10 @@ class AlienBug(pygame.sprite.Sprite):
         self.score_value = 50
 
     def take_damage(self, amount):
+        """
+        Обрабатывает получение и уменьшение урона
+        Возвращает True, если хп опустилось до нуля, иначе False
+        """
         self.hp -= amount
         if self.hp <= 0:
             self.kill()
@@ -81,6 +89,10 @@ class AlienBug(pygame.sprite.Sprite):
         return False
 
     def update(self, dt):
+        """
+        Реализует следование по маршруту
+        Вычисляет вектор направления к следующей точке, обновляет анимацию поворота 
+        """
         # если достигли конца маршрута (аванпоста)
         if self.current_wp_index >= len(self.my_waypoints):
             self.reached_base = True
@@ -169,6 +181,10 @@ class Outpost(pygame.sprite.Sprite):
         self.hp = self.max_hp
         
     def take_damage(self, amount):
+        """
+        Обрабатывает получение и уменьше урона базой
+        Переключает спрайт в зависимости от числа хп
+        """
         self.hp -= amount
         if self.hp < 0:
             self.hp = 0
@@ -179,8 +195,10 @@ class Outpost(pygame.sprite.Sprite):
             self.image = self.outpost_0hp_img
             
     def reset_pos(self, new_pos):
+        """Обновляет координаты при смене маршрута в новой волне"""
         self.rect.center = new_pos
     
+
 class Turret(pygame.sprite.Sprite):
     """"Класс турели"""
     def __init__(self, pos, *groups):
@@ -203,6 +221,7 @@ class Turret(pygame.sprite.Sprite):
         self.shoot_timer = 0.0
 
     def find_target(self, bugs_group):
+        """Ищет и возвращает объект ближайшего врага в пределах радиуса обзора"""
         closest_bug = None
         min_dist = self.radius
 
@@ -215,6 +234,10 @@ class Turret(pygame.sprite.Sprite):
         return closest_bug
 
     def update(self, dt, bugs_group, all_sprites, play_sound, shoot_sound, bullets_group):
+        """
+        Обновляет логику турели: сканирует цели, управляет таймером перезарядки, 
+        создает объекты пуль, вызывает воспроизведение звука и меняет спрайт прицеливания
+        """
         self.target = self.find_target(bugs_group)  # находим цель
         self.shoot_timer += dt  # обновляем таймер перезарядки
         if self.target and self.shoot_timer >= self.cooldown:
